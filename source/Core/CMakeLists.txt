@@ -15,8 +15,14 @@ elseif(UNIX AND NOT APPLE)
   set_target_properties(Core PROPERTIES LINK_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--version-script=${PROJECT_SOURCE_DIR}/Http.map,-rpath,$ORIGIN")
 endif()
 
+# Include Parser folder to Creator lib
+target_include_directories(${PROJECT_NAME} PRIVATE ../Parser/)
+
+# Include Router
+target_include_directories(${PROJECT_NAME} PRIVATE ../Router/)
+
 # Link ConfsManager to Core 
-target_link_libraries(Core PRIVATE ConfsManager)
+target_link_libraries(Core PRIVATE ConfsManager Parser Router)
 
 if(WIN32)  
   install(TARGETS Core RUNTIME DESTINATION "${CMAKE_SOURCE_DIR}/_install/windows/Core")  

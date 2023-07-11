@@ -1,12 +1,14 @@
 # Orpy HTTP Server
 
-Implementation of a HTTP server in C++17 for Windows and Linux.
+Implementation of a HTTP server in C++17 for Windows and Linux v2.
+Updated code based on last complete version of Orpy.
 
 ## Features
 
-- Can handle multiple concurrent connections, tested up to 10k.
-- Support basic HTTP request and response.
-- HTTP/1.1 support with a simple state machine parser.
+- Handles multiple concurrent connections, tested up to 10k.
+- Supports basic HTTP request and response GET and POST.
+- Provides HTTP/1.1 support with a simple state machine parser.
+- Includes a non-blocking file server.
 
 ## Quick start
 
@@ -15,7 +17,8 @@ mkdir build && cd build
 cmake ../source ..
 make install # on linux
 ```
-On Windows is possible use Visual Studio 2022 or in Linux use Visual Studio Code
+
+Use Visual Studio 2022 on Windows or Visual Studio Code on Linux.
 
 ## Design
 
@@ -27,12 +30,14 @@ The server program consists of:
 
 ## Config
 
-It respond with 444 if url is not set in the Configs/sites/url.json 
+If the URL is not specified in the "Configs/sites/domain.json" file, the server will respond with a 444 error. 
 
-It require a Data folder where put the single folders for the urls.
-"urls" field is used to add or remove part of the website or allow specific file
+To set up the server, create a "Data" folder where you can place individual folders for each URL.
+Create a file named "main.style" in the "Data/localhost/style" directory and add your desired HTML code for content.
 
-localhost8888.json
+The "urls" field in the configuration is used to add or remove parts of the website or allow specific files.
+
+To create a minimal "localhost.json" configuration file for a server to work, you can include the following fields:
 ```json
 {
   "path": "localhost/",
@@ -42,7 +47,7 @@ localhost8888.json
 
 ## Benchmark
 
-I used a tool called [wrk](https://github.com/wg/wrk) to benchmark this HTTP server. 
+I used a tool called [wrk](https://github.com/wg/wrk) to benchmark this HTTP server v1. 
 
 My Specs:
 ```bash
@@ -107,4 +112,4 @@ Transfer/sec:     71.85MB
 ```
 
 ## Credits
-I started from [trungams's http-server](https://github.com/trungams/http-server)
+Original code is inspired by [trungams's http-server](https://github.com/trungams/http-server)

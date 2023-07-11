@@ -20,58 +20,73 @@ namespace Orpy
     {
         int position = 0;
 
-        std::string method;
+        std::string method = "";
 
-        //URL
-        std::string URI;
-        std::string URL;
+        // IP
+        std::string clientIP = "";
 
+        // User-Agent
+        std::string useragent = "";
+        bool isBot = false;
+
+        // User
+        std::string session_id = "";
+        std::string userid = "";
+
+        // URL
+        std::string URI = "";
+        std::string URL = "";
+        std::string URLname = ""; // for multilingual commands
         std::vector<std::string> commands;
         int nCommands = 0;
 
-        //Host
-        std::string Host;
+        std::string command_id = "";
 
-        //Referer
+        // Host
+        std::string Host = "";
+
+        // Referer
         std::string Referer = "";
 
-        //Encoding
-        //deflate and gzip not supported yet
+        // Origin
+        std::string Origin = "";
+
+        // Encoding
+        // deflate and gzip not supported yet
         bool br = false;
 
-        //Language
-        std::string lang;
-
-        //Content-Length
+        // Content-Length
         int contentLength = 0;
-        std::string contentType; // basic form
+        std::string contentType = ""; // basic form
 
-        //Cookies
+        // Cookies
         std::unordered_map<std::string, std::string> cookies;
 
-        //GET VARs
+        // GET VARs
         bool hasGET = false;
         std::unordered_map<std::string, std::string> GET;
 
-        //POST
+        // POST
         bool isPOST = false;
         std::unordered_map<std::string, std::string> POST;
+        bool done = false;
                 
         bool isMultipart = false;
         std::string boundary = "";
         std::unordered_map<std::string, MP_DATA> MULTIPART;
-        
-        //is FILE?
+                
+        // is FILE?
         bool isFile = false;
         std::string filePath = "";
+        std::string fileModifiedSince = "";
 
-        //Error
+        // Error
         bool error = false;
 
-        //Conf
-        SITEData Conf = SITEData();
+        // Conf
+        SITEData Conf;
 
-        //Repsponse
-        HttpResponse response = HttpResponse();
+        // Repsponse
+        HttpResponse response; // MUST BE MOVED FROM HERE
     };
 }

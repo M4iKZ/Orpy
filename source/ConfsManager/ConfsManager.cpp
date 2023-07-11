@@ -1,30 +1,28 @@
 
 #include "ConfsManager.hpp"
-#include "Json.hpp"
 
 namespace Orpy
 {
 	std::shared_ptr<IConfs> _confs = nullptr;
-	//std::shared_ptr<ConfsManager> _confs = nullptr;	
-	
+
 	void loadConfs()
 	{
-		_confs = std::make_shared<ConfsManager>();		
+		_confs = std::make_shared<ConfsManager>();
 	}
 
-	ConfsManager::ConfsManager() 
-	{ 
+	ConfsManager::ConfsManager()
+	{
 		_guard = new fileGuard<ConfsManager>(this, fs::current_path().string() + "/Configs/sites");
-		
+
 		debug("Confs Loaded ... ");
 	}
 
-	ConfsManager::~ConfsManager() 
-	{ 
+	ConfsManager::~ConfsManager()
+	{
 		_confs.reset();
-		
-		debug("Confs lib unloaded ...");  
-	}	
+
+		debug("Confs lib unloaded ...");
+	}
 
 	void ConfsManager::New(fs::path file)
 	{
@@ -59,17 +57,17 @@ namespace Orpy
 		std::unique_lock<std::shared_mutex> lock(_mutex);
 		loadJsonConfig(path, _sites);
 	}
-		
+
 	bool ConfsManager::Get(std::string host, SITEData& site)
 	{
 		std::unique_lock<std::shared_mutex> lock(_mutex);
-				
+
 		auto it = _sites.find(host);
-		if (it == _sites.end())		
+		if (it == _sites.end())
 			return false;
-		
+
 		site = it->second;
-		
-		return true;		
+
+		return true;
 	}
 }

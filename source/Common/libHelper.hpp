@@ -52,14 +52,7 @@ public:
 
     ~DynamicLibrary() 
     {   
-        if(is_loaded())
-            delete object_;
-
-#ifdef _WIN32
-        FreeLibrary(library_handle_);
-#else
-        dlclose(library_handle_);
-#endif      
+        close();
     }
 
     T* operator->() 
@@ -68,6 +61,18 @@ public:
     }
 
 private:
+    void close()
+    {
+        if (is_loaded())
+            delete object_;
+
+#ifdef _WIN32
+        FreeLibrary(library_handle_);
+#else
+        dlclose(library_handle_);
+#endif     
+    }
+
     bool is_loaded() const 
     {
         return library_handle_ != nullptr;

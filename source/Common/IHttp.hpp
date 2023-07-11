@@ -8,9 +8,8 @@ namespace Orpy
 	{
 	public:
 		virtual ~IHttp() = default;
-
-		virtual void elaborateData(HTTPData*, HTTPData*) = 0;		
-		virtual void receivePOST(HTTPData*, int) = 0;		
+			
+		virtual void elaborateData(HTTPData*) = 0;	
 	};
 
 	extern "C" 

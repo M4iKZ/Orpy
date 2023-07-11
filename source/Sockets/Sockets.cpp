@@ -1,27 +1,25 @@
-#include <iostream>
 
 #include "Sockets.hpp"
 
 namespace Orpy
-{	
+{
 	ISockets* allSockets(IHttp* h, const char* host, int& port)
 	{
 		return new Sockets(h, host, port);
 	}
-		
+
 	Sockets::Sockets(IHttp* h, const char* host, int& port) : _http(h), _port(port)
-	{ 
+	{
 #ifdef _WIN32
 		sprintf_s(_host, "%s", host);
 #else
 		snprintf(_host, sizeof(_host), "%s", host);
 #endif
-		
+
 #ifdef _WIN32
 		numWorkers = std::thread::hardware_concurrency();
 
-		if (numWorkers == 0) numWorkers = 1; // set a default value
-		else numWorkers -= 1;
+		if (numWorkers == 0) numWorkers = 1; // set a default value		
 #else
 		numWorkers = sysconf(_SC_NPROCESSORS_ONLN);
 
@@ -29,7 +27,7 @@ namespace Orpy
 #endif
 
 		_workers.resize(numWorkers);
-		
+
 		std::string str;
 		str.assign(_host, sizeof(_host) / sizeof(char));
 
@@ -37,34 +35,34 @@ namespace Orpy
 		debug("host: " + str + " and port: " + std::to_string(_port));
 	}
 
-	Sockets::~Sockets() 
-	{ 
+	Sockets::~Sockets()
+	{
 		_isRunning.store(false);
-		
+
 		socketClose();
 		
 		std::cout << "socket closed ... " << std::endl;
-		
+
 		_sync.notifyClose();
-		
+
 #ifdef _WIN32		
 		if (_listener.joinable())
 			_listener.join();
 #else
 		pthread_join(_listener, nullptr);
 #endif
-						
-		for (auto&t : _workers)
+
+		for (auto& t : _workers)
 		{
 #ifdef _WIN32	
 			if (t.joinable())
-				t.join();			
+				t.join();
 #else
 			pthread_join(t, nullptr);
 #endif			
 		}
-				
-		debug("Sockets lib unloaded...");		
+
+		debug("Sockets lib unloaded...");
 	}
 
 	int Sockets::socketInit()
@@ -96,20 +94,9 @@ namespace Orpy
 		// If iMode != 0, non-blocking mode is enabled.
 		u_long iMode = blocking ? 0 : 1;
 		return (ioctlsocket(fd, FIONBIO, &iMode) == 0) ? true : false;
-#else
+#else		
 		return true;
 #endif
-	}
-
-	int Sockets::socketClose()
-	{
-		int status = 0;
-
-#ifdef _WIN32
-		status = shutdown(_sock, SD_BOTH);
-		if (status == 0) { status = closesocket(_sock); WSACleanup(); }		
-#endif
-		return status;
 	}
 
 	bool Sockets::start(bool block)
@@ -124,7 +111,7 @@ namespace Orpy
 		}
 
 #ifdef _WIN32
-		_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);		
 #else
 		_sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 #endif
@@ -134,71 +121,80 @@ namespace Orpy
 			return false;
 		}
 
-		// initialize the socket's address
-		memset(&_socketAddress, 0, sizeof(sockaddr_in));
+		// initialize the socket's address		
+		if (!setSocket(_port, _sock, _socketAddress, _socketAddress_len))
+		{
+			printf("Problems with setSocket for HTTP!");
+			socketClose();
+			return false;
+		}
 
-		_socketAddress.sin_family = AF_INET;
-		_socketAddress.sin_port = htons(_port);
+		_isRunning.store(true);
 
-		_socketAddress.sin_addr.s_addr = inet_pton(AF_INET, _host, &_socketAddress.sin_addr);
-		if (_socketAddress.sin_addr.s_addr == INADDR_NONE)
+		std::cout << "Socket init succefully" << std::endl;
+
+#ifdef _WIN32
+		_listener = std::thread(&Sockets::listener, this);
+#else
+		pthread_create(&_listener, nullptr, &Sockets::listener_helper, this);
+#endif
+
+		for (int id = 0; id < numWorkers; ++id)
+#ifdef _WIN32
+			_workers.push_back(std::thread(&Sockets::Worker, this, id));
+#else
+		{
+			_worker_args[id] = { id, this };
+			pthread_create(&_workers[id], nullptr, &Sockets::worker_helper, &_worker_args[id]);
+		}
+#endif
+
+		return true;
+	}
+
+	bool Sockets::setSocket(int port, socket_t sock, sockaddr_in& socketAddress, int& socketAddress_len)
+	{
+		memset(&socketAddress, 0, sizeof(sockaddr_in));
+
+		socketAddress.sin_family = AF_INET;
+		socketAddress.sin_port = htons(port);
+
+		socketAddress.sin_addr.s_addr = inet_pton(AF_INET, _host, &socketAddress.sin_addr);
+		if (socketAddress.sin_addr.s_addr == INADDR_NONE)
 		{
 			printf("Address Error!\n");
 			socketClose();
 			return false;
 		}
 
-		_socketAddress_len = sizeof(_socketAddress);
-						
-		int reuse_addr = 1;
-
-		setsockopt(_sock, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse_addr, sizeof(reuse_addr));
+		socketAddress_len = sizeof(socketAddress);
 
 #ifndef _WIN32
 		int optval = 1;
-
-		setsockopt(_sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+		setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
 #endif 
+		int reuse_addr = 1;
+		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse_addr, sizeof(reuse_addr));
 
-		if (bind(_sock, (sockaddr*)&_socketAddress, _socketAddress_len) < 0)
+		if (bind(sock, (sockaddr*)&socketAddress, socketAddress_len) < 0)
 		{
 			printf("Cannot connect socket to address\n");
 			socketClose();
 			return false;
 		}
 
-		if (listen(_sock, SOMAXCONN) < 0)
+		if (listen(sock, SOMAXCONN) < 0)
 		{
 			printf("Socket listen failed\n");
 			socketClose();
 			return false;
 		}
 
-		if (!socketSetBlocking(_sock, _block))
+		if (!socketSetBlocking(sock, _block))
 		{
 			printf("Problems with SetBlocking");
 			socketClose();
 			return false;
-		}
-
-		_isRunning.store(true);
-		
-		std::cout << "Socket init succefully" << std::endl;
-
-#ifdef _WIN32
-		_listener = std::thread(&Sockets::listener, this);		
-#else
-		pthread_create(&_listener, nullptr, &Sockets::listener_helper, this);
-#endif
-
-		for (int id = 0; id < numWorkers; ++id)
-		{
-#ifdef _WIN32
-			_workers.push_back(std::thread(&Sockets::Worker, this, id));
-#else
-			_worker_args[id] = { id, this };
-			pthread_create(&_workers[id], nullptr, &Sockets::worker_helper, &_worker_args[id]);
-#endif
 		}
 
 		return true;
@@ -207,29 +203,64 @@ namespace Orpy
 	void Sockets::listener()
 	{
 		debug("ready to listen ... ");
-
-		sockaddr_in client_address;
+				
 		while (_isRunning.load())
 		{
+			int client_fd = -1;
+			sockaddr_in client_address;
 			socklen_t client_len = sizeof(client_address);
 
-#ifdef _WIN32
-			socket_t client_fd = (int)accept(_sock, (sockaddr*)&client_address, &client_len);
-#else
-			socket_t client_fd = accept4(_sock, (sockaddr*)&client_address, &client_len, SOCK_NONBLOCK);
-#endif
-			
-			if (client_fd < 0) continue;
+			fd_set readfds;
+			FD_ZERO(&readfds);
+			FD_SET(_sock, &readfds);
 
-			if (!socketSetBlocking(client_fd, _block))
+			int max_sd = _sock;
+
+			struct timeval timeout;
+			timeout.tv_sec = 1;
+			timeout.tv_usec = 0;
+
+			int iResult = select(max_sd + 1, &readfds, NULL, NULL, &timeout);
+			if (iResult == -1)
 			{
+				socketClose();
+				break;
+			}
+			else if (iResult == 0)
+			{
+				if (_isRunning.load())
+					continue;
+				else
+					break;
+			}
+						
+#ifdef _WIN32				
+			client_fd = accept(_sock, (sockaddr*)&client_address, &client_len);
+#else
+			client_fd = accept4(_sock, (sockaddr*)&client_address, &client_len, SOCK_NONBLOCK);
+#endif			
+			if (client_fd == INVALID_SOCKET)
+			{
+				close(client_fd, false);
 				continue;
 			}
 
-			HTTPData* data = new HTTPData();
-			data->fd = client_fd;
+			if (!socketSetBlocking(client_fd, _block))
+				continue;
 
-			_sync.push(data);
+			std::string key = std::to_string(client_fd);
+			
+			_clients[key].key = key;
+			_clients[key].fd = client_fd;
+			
+			char client_ip[INET_ADDRSTRLEN];
+			struct in_addr ipAddr = client_address.sin_addr;
+			inet_ntop(AF_INET, &ipAddr, client_ip, INET_ADDRSTRLEN);
+
+			std::string ip(client_ip);
+			_clients[key].IP = ip;
+
+			_sync.push(key);
 		}
 
 		debug("listener stopped ... ");
@@ -238,235 +269,220 @@ namespace Orpy
 	void Sockets::Worker(int id)
 	{
 		debug("worker " + std::to_string(id) + " starting ... ");
-		
+
 		while (_isRunning.load())
 		{
-			void* ptr = _sync.waitCondition(id);
-
-			if (ptr != nullptr)
+			std::string key = _sync.waitCondition(id);
+			if (key != std::string())
 			{
-				HTTPData* data = reinterpret_cast<HTTPData*>(ptr);
-				if (data->phase == 0)
-					receiveData(data);				
-				else if (data->phase == 1)
-					sendData(data);
-				else if (data->phase == 2)
+				auto data = _clients.find(key);
+				if (data != _clients.end())
 				{
-					HTTPData* response = new HTTPData(1);
-					response->fd = data->fd;
-
-					_http->elaborateData(data, response);
-					_sync.push(response);
-
-					delete data;
+					if (data->second.startTime < std::time(nullptr))
+						clear(key);
+					else if (data->second.phase == 0)
+						receiveData(&data->second);
+					else if (data->second.phase == 1)
+						sendData(&data->second);
+					else if (data->second.phase == 2)
+						elaborate(&data->second);
+					else if (data->second.phase == 3)
+						sendFile(&data->second);
+					else
+						clear(key);
 				}
-				else if (data->phase == 3)
-				{
-					sendFile(data);
-					delete data;
-				}
-				else
-					delete data;
 			}
 		}
 
 		debug("worker " + std::to_string(id) + " stopped");
 	}
-		
+
+	void Sockets::elaborate(HTTPData* data)
+	{
+		data->phase = 1; //Response
+		_http->elaborateData(data);
+
+		_sync.push(data->key);
+	}
+
 	void Sockets::receiveData(HTTPData* data)
 	{
-		HTTPData* request, * response;
-		request = data;
-				
-		int byte_count = Receive(request->fd, request->buffer);
-		if (byte_count > 0)
-		{		
-			request->phase = 2;
-			_sync.push(request);
-			
+		int byte_count = 0;
+		if (!Receive(data, byte_count))
 			return;
-		}		
-		else if (byte_count < 0)
-		{
-#ifdef _WIN32
-			if (WSAGetLastError() == WSAEWOULDBLOCK)
-#else 
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
-#endif
-			{
-				if (request->startTime > std::time(nullptr))
-				{
-					_sync.push(request);
-
-					return;
-				}
-			}
-		}
 		
-		close(request->fd, false);
-		delete request;
+		data->phase = 2; //Elaborate!			
+		elaborate(data);
 	}
-	
+
 	void Sockets::sendData(HTTPData* data)
 	{
-		HTTPData* request, * response;
-		response = data;
-				
-		int byte_count = Send(response->fd, response->buffer, response->length);
-		if (byte_count >= 0)
+		int byte_count = 0;
+		if (!Send(data, byte_count))
 		{
-			request = new HTTPData(0);
-			request->fd = response->fd;
-						
-			_sync.push(request);
-						
-			delete response;							
+			clear(data->key);
+			return;
 		}
-		else
-		{			
-			close(data->fd, false);
-			delete response;						
-		}
+
+		HTTPData newData(0, data->fd, data->key);
+		_clients[data->key] = newData;
+
+		_sync.push(data->key);
 	}
 
 	void Sockets::sendFile(HTTPData* data)
 	{
-		if (data->fileSize <= 0)
+		if (data->fileSize < 0)
 		{
-			std::cout << "fileSize == 0!" << std::endl;
+			debug("fileSize < 0!");
+			clear(data->key);
 			return;
 		}
 
-		if (Send(data->fd, data->buffer, data->length) < data->length)
+		int len = 0;
+		if (!data->sentHeader)
 		{
-			std::cout << "are you sure about the lenght of the header?" << std::endl;
+			if (!Send(data, len))
+				return;
+
+			if (len < data->length)
+			{
+				debug("are you sure about the lenght of the header?");
+				clear(data->key);
+				return;
+			}
+
+			data->sentHeader = true;
+			data->buffer.clear();
+			data->startTime = setTime();
+		}
+		else if (data->buffer.size() > 0)
+		{
+			if (!Send(data, len))
+				return;
+
+			data->sent += len;
+			data->buffer.clear();
+		}
+
+		if (data->sent >= data->fileSize)
+		{
+			HTTPData newData(0, data->fd, data->key);
+			_clients[data->key] = newData;
+
+			_sync.push(data->key);
 			return;
 		}
 
-		std::ifstream file(data->fileName, std::ios::in | std::ifstream::binary);
+		std::fstream file(data->fileName, std::ios::in | std::ifstream::binary);
 		if (file.fail())
 		{
-			std::cout << "are you sure about the file?" << std::endl;
+			debug("are you sure about the file?");
+			clear(data->key);
 			return;
 		}
-		
-		bool error = false;
-		int64_t i = data->fileSize;		
-		while (i != 0)
-		{			
-			int64_t ssize = __min(i, ReadSize);
 
-			std::vector<char> chunk(ssize);
+		size_t ssize = std::min((data->fileSize - data->sent), (size_t)MaxFileSize);
 
-			if (!file.read(chunk.data(), chunk.size()))
-			{
-				error = true;
-				std::cout << "did you touch the file?" << std::endl;
+		if (data->cursor != std::streampos())
+			file.seekg(data->cursor);
 
-				break;
-			}
+		data->buffer.resize(ssize);
 
-			int l = Send(data->fd, chunk, (int)ssize);
-			if (l <= 0)
-			{
-				error = true;
-				std::cout << "something went wrong with the connection!" << std::endl;
+		if (!file.read(data->buffer.data(), ssize))
+		{
+			debug("did you touch the file? " + data->fileName +
+				"\nError reading file.Error flags : " + std::to_string(file.rdstate()));
 
-				break;
-			}
-
-			i -= l;			
+			clear(data->key);
+			return;
 		}
-				
+
+		data->startTime = setTime();
+		data->cursor = file.tellg();
 		file.close();
 
-		if (error)
-		{
-			close(data->fd, false);
-			delete data;
-		}
-		else
-		{
-			HTTPData* request = new HTTPData(0);
-			request->fd = data->fd;
-
-			_sync.push(request);
-		}
+		_sync.push(data->key);
 	}
 
-	void Sockets::receiveAll(HTTPData* data, int size)
-	{
-		int received = 0;
-		while (true)
-		{
-			int byte_count = Receive(data->fd, data->buffer);
-			if (byte_count > 0)
-			{	
-				received += byte_count;
-
-				if(received == size)
-					return;				
-			}
-			else if (byte_count < 0)
-			{
-#ifdef _WIN32
-				if (WSAGetLastError() == WSAEWOULDBLOCK)
-#else 
-				if (errno == EAGAIN || errno == EWOULDBLOCK)
-#endif
-				{
-					continue;
-				}
-			}
-		}
-	}
-
-	int Sockets::Receive(socket_t fd, std::vector<char>& buffer)
+	bool Sockets::Receive(HTTPData* data, int& total_bytes)
 	{
 		int bytes_received = 0;
-		int total_bytes = 0;
-		while (true) 
+		total_bytes = 0;
+		while (true)
 		{
 			std::vector<char> chunk(ReadSize);
+			bytes_received = recv(data->fd, chunk.data(), ReadSize, 0);
+			if (bytes_received > 0)
+			{
+				data->buffer.insert(data->buffer.end(), chunk.begin(), chunk.begin() + bytes_received);
+				total_bytes += bytes_received;
 
-			bytes_received = recv(fd, &chunk[0], ReadSize, 0);
-						
-			if (bytes_received <= 0)
-			{				
+				if (total_bytes > MaxUploadSize)
+					return true;
+			}
+			else
+			{
 				if (total_bytes > 0)
-					break;
+					return true;
 				else if (total_bytes == 0)
 					if (bytes_received != 0)
-						total_bytes = bytes_received;
-				
+					{
+#ifdef _WIN32
+						if (WSAGetLastError() == WSAEWOULDBLOCK)
+#else 
+						if (errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
+						{
+							_sync.push(data->key);
+							break;
+						}
+
+					}
+
+				clear(data->key);
+
 				break;
 			}
-			
-			buffer.insert(buffer.end(), chunk.begin(), chunk.begin() + bytes_received);
-			total_bytes += bytes_received;	
 		}
 
-		return total_bytes;
+		return false;
 	}
-
-	int Sockets::Send(socket_t fd, std::vector<char> buffer, int length)
+		
+	bool Sockets::Send(HTTPData* data, int& len)
 	{
-		int l = send(fd, buffer.data(), buffer.size(), 0);
-		if (l < 0)
+		len = send(data->fd, data->buffer.data(), data->buffer.size(), 0);
+		if (len <= 0)
 		{
 #ifdef _WIN32 
 			if (WSAGetLastError() == WSAEWOULDBLOCK)
 #else 
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
-#endif				
-				return Send(fd, buffer, length);			
-			else		
-				return l;
+#endif							
+				_sync.push(data->key);
+			else
+				clear(data->key);
+
+			return false;
 		}
-		
-		return l;		
+
+		return true;
 	}
-	
+
+	void Sockets::clear(std::string key)
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		{
+			auto data = _clients.find(key);
+			if (data != _clients.end())
+			{
+				close(data->second.fd, false);				
+				debug(key + " with fd " + std::to_string(data->second.fd) + " session from " + data->second.IP + " closed, open sessions " + std::to_string(_clients.size() - 1));
+				_clients.erase(key);
+			}
+		}
+	}
+
 	void Sockets::close(int fd, bool main)
 	{
 #ifdef _WIN32                
@@ -477,5 +493,23 @@ namespace Orpy
 		else
 			shutdown(fd, SHUT_WR);
 #endif
+	}
+
+	int Sockets::socketClose()
+	{
+		int status = 0;
+
+#ifdef _WIN32
+		status = shutdown(_sock, SD_BOTH);
+		if (status == 0)
+		{
+			status = closesocket(_sock);
+			WSACleanup();
+		}
+#else
+		//status = shutdown(_sock, SHUT_RDWR);
+		//if (status == 0) { close(_sock); }		
+#endif
+		return status;
 	}
 }

@@ -87,6 +87,9 @@ namespace Orpy
 		{"html", "text/html"},
 		{"txt", "text/plain"},
 		{"css", "text/css"},
+		{"scss", "text/x-scss"},
+		{"sass", "text/x-sass"},
+		{"map", "application/json"},
 		{"js", "application/javascript"},
 
 		{"jpeg", "image/jpeg"},
@@ -97,11 +100,14 @@ namespace Orpy
 		{"ico", "image/x-icon"},
 		{"webp", "image/webp"},
 
+		{"woff", "font/woff"},
+		{"woff2", "font/woff2"},
+
 		{"json", "application/json"},
 		{"xml", "application/xml"},
 
 		{"zip", "application/zip"},
-
+		
 		//{"bin", "application/octet-stream"}
 	};
 }

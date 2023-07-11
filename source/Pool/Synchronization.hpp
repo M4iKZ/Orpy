@@ -1,22 +1,26 @@
 #pragma once
 
+#include <iostream>
+#include <string>
+
+#include <vector>
+
 #include <mutex>
 #include <condition_variable>
 
-#include "Pool.hpp"
-
 namespace Orpy
 {
+    template<typename T>
     struct ThreadSynchronization
     {
     protected:
-        
+
         std::condition_variable condition;
         std::mutex mutex;
 
-        Pool* pool = new Pool();
+        std::vector<T> q;
 
-    public: 
+    public:
         bool isRunning = true;
 
         void notifyClose()
@@ -30,28 +34,29 @@ namespace Orpy
             condition.notify_all();
         }
 
-        void* waitCondition(int id)
-        {            
-            std::unique_lock<std::mutex> lock(mutex);
-            condition.wait(lock, [this]() { return !pool->empty() || !isRunning; });
-
-            if (!pool->empty())
+        T waitCondition(int id = 0)
+        {
+            T ptr;
             {
-                auto ptr = pool->get();
-                pool->pop();
+                std::unique_lock<std::mutex> lock(mutex);
+                condition.wait(lock, [this]() { if (q.empty()) q.shrink_to_fit(); return !q.empty() || !isRunning; });
 
-                return ptr;
-            }           
+                if (isRunning)
+                {
+                    ptr = q.front();
+                    q.erase(q.begin());
+                }
+            }
 
-            return nullptr;
+            return ptr;
         }
-                
-        void push(void* ptr)
+
+        void push(T ptr)
         {
             {
                 std::lock_guard<std::mutex> lock(mutex);
 
-                pool->push(ptr);
+                q.push_back(ptr);
             }
 
             condition.notify_one();

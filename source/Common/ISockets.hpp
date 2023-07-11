@@ -10,9 +10,7 @@ namespace Orpy
 		virtual ~ISockets() = default;
 
 		virtual bool start(bool = false) = 0;
-		virtual void close(int, bool = false) = 0;				
-						
-		virtual void receiveAll(HTTPData*, int) = 0;
+		virtual void close(int, bool = false) = 0;										
 	};
 	
 	extern "C"

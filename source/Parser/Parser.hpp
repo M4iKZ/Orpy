@@ -11,7 +11,7 @@ namespace Orpy
 	void getPOST(std::vector<char>&, HttpRequest*);	
 	void elaborateMultipart(std::vector<char>&, HttpRequest*);	
 
-	bool getType(std::string&);
+	bool getType(HttpRequest*, std::string&);
 
 	void parser(HttpRequest*, std::vector<char>&);	
 }

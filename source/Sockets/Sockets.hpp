@@ -2,6 +2,9 @@
 
 // Windows
 #ifdef _WIN32
+
+#define NOMINMAX
+
 # ifndef WIN32_LEAN_AND_MEAN
 #  define WIN32_LEAN_AND_MEAN
 # endif /* WIN32_LEAN_AND_MEAN */
@@ -33,12 +36,16 @@
 
 #endif 
 
+#include <algorithm>
 #include <stdio.h>
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <array>
 #include <atomic>
 #include <fstream>
+#include <iostream>
+#include <mutex>
 
 #include "ISockets.hpp"
 #include "Synchronization.hpp"
@@ -65,7 +72,7 @@ namespace Orpy
 		socket_t _sock = INVALID_SOCKET;
 
 		int _timeout_in_seconds = 2 * 60;
-		
+
 		char _host[10];
 		short _port;
 
@@ -74,30 +81,37 @@ namespace Orpy
 
 		bool _block = false;
 
-		int  socketInit();		
+		int  socketInit();
 		bool socketSetBlocking(int, bool);
 		int  socketClose();
+
+		bool setSocket(int, socket_t, sockaddr_in&, int&);
 
 		void listener();
 		void Worker(int);
 
+		void elaborate(HTTPData*);
+
 		void receiveData(HTTPData*);
 		void sendData(HTTPData*);
-		
-		int Receive(socket_t, std::vector<char>&);
-		int Send(socket_t, std::vector<char>, int);
 
-		//
-		// https://stackoverflow.com/questions/63494014/sending-files-over-tcp-sockets-c-windows
-		// 
+		bool Receive(HTTPData*, int&);
+		bool Send(HTTPData*, int&);
+					
+		void clear(std::string);
+
 		// Sends a file
 		void sendFile(HTTPData*);
 
 		//thread vars
 		std::atomic<bool> _isRunning;
 		int numWorkers;
+		int _activeworkers = 0;
 
-		ThreadSynchronization _sync;
+		ThreadSynchronization<std::string> _sync;
+		std::unordered_map<std::string, HTTPData> _clients;
+
+		std::mutex mutex;
 
 #ifdef _WIN32
 		std::thread _listener;
@@ -112,7 +126,7 @@ namespace Orpy
 			return nullptr;
 		}
 
-		struct worker_args 
+		struct worker_args
 		{
 			int id;
 			Sockets* s;
@@ -133,8 +147,6 @@ namespace Orpy
 		~Sockets() override;
 
 		bool start(bool = false) override;
-		void close(int, bool = true) override;	
-
-		void receiveAll(HTTPData*, int) override;
+		void close(int, bool = true) override;
 	};
 }
