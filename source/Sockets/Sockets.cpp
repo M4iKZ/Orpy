@@ -250,15 +250,16 @@ namespace Orpy
 
 			std::string key = std::to_string(client_fd);
 			
-			_clients[key].key = key;
-			_clients[key].fd = client_fd;
+			HTTPData* client = new HTTPData(0, client_fd, key);
 			
 			char client_ip[INET_ADDRSTRLEN];
 			struct in_addr ipAddr = client_address.sin_addr;
 			inet_ntop(AF_INET, &ipAddr, client_ip, INET_ADDRSTRLEN);
 
 			std::string ip(client_ip);
-			_clients[key].IP = ip;
+			client->IP = ip;
+
+			addClient(client);
 
 			_sync.push(key);
 		}
@@ -278,16 +279,17 @@ namespace Orpy
 				auto data = _clients.find(key);
 				if (data != _clients.end())
 				{
-					if (data->second.startTime < std::time(nullptr))
+					int phase = data->second->phase;
+					if (data->second->startTime < std::time(nullptr))
 						clear(key);
-					else if (data->second.phase == 0)
-						receiveData(&data->second);
-					else if (data->second.phase == 1)
-						sendData(&data->second);
-					else if (data->second.phase == 2)
-						elaborate(&data->second);
-					else if (data->second.phase == 3)
-						sendFile(&data->second);
+					else if (phase == 0)
+						receiveData(data->second);
+					else if (phase == 1)
+						sendData(data->second);
+					else if (phase == 2)
+						elaborate(data->second);
+					else if (phase == 3)
+						sendFile(data->second);
 					else
 						clear(key);
 				}
@@ -310,7 +312,7 @@ namespace Orpy
 		int byte_count = 0;
 		if (!Receive(data, byte_count))
 			return;
-		
+				
 		data->phase = 2; //Elaborate!			
 		elaborate(data);
 	}
@@ -324,10 +326,11 @@ namespace Orpy
 			return;
 		}
 
-		HTTPData newData(0, data->fd, data->key);
-		_clients[data->key] = newData;
+		std::string key = data->key;
+		_clients[key] = new HTTPData(0, data->fd, data->key, data->IP);
+		delete data;
 
-		_sync.push(data->key);
+		_sync.push(key);		
 	}
 
 	void Sockets::sendFile(HTTPData* data)
@@ -367,10 +370,11 @@ namespace Orpy
 
 		if (data->sent >= data->fileSize)
 		{
-			HTTPData newData(0, data->fd, data->key);
-			_clients[data->key] = newData;
+			std::string key = data->key;
+			_clients[key] = new HTTPData(0, data->fd, data->key, data->IP);
+			delete data;
 
-			_sync.push(data->key);
+			_sync.push(key);
 			return;
 		}
 
@@ -417,30 +421,22 @@ namespace Orpy
 			{
 				data->buffer.insert(data->buffer.end(), chunk.begin(), chunk.begin() + bytes_received);
 				total_bytes += bytes_received;
-
+				
 				if (total_bytes > MaxUploadSize)
 					return true;
 			}
 			else
 			{
 				if (total_bytes > 0)
-					return true;
-				else if (total_bytes == 0)
-					if (bytes_received != 0)
-					{
+					return true;				
 #ifdef _WIN32
-						if (WSAGetLastError() == WSAEWOULDBLOCK)
+				if (WSAGetLastError() == WSAEWOULDBLOCK)
 #else 
-						if (errno == EAGAIN || errno == EWOULDBLOCK)
-#endif
-						{
-							_sync.push(data->key);
-							break;
-						}
-
-					}
-
-				clear(data->key);
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+#endif				
+					_sync.push(data->key);
+				else
+					clear(data->key);
 
 				break;
 			}
@@ -475,12 +471,35 @@ namespace Orpy
 		{
 			auto data = _clients.find(key);
 			if (data != _clients.end())
-			{
-				close(data->second.fd, false);				
-				debug(key + " with fd " + std::to_string(data->second.fd) + " session from " + data->second.IP + " closed, open sessions " + std::to_string(_clients.size() - 1));
-				_clients.erase(key);
-			}
+				clearClient(data->second);
 		}
+	}
+
+	void Sockets::addClient(HTTPData* data)
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		{
+			if (_sync.getPoolSize() == 0 && _clients.size() > 0)
+			{
+				for (auto& c : _clients)
+					if (c.second->startTime < std::time(nullptr))
+						clearClient(c.second);
+
+				if (_clients.size() == 0)
+					std::unordered_map<std::string, HTTPData*>().swap(_clients);
+			}
+
+			_clients[data->key] = data;
+		}
+	}
+
+	void Sockets::clearClient(HTTPData* data)
+	{
+		close(data->fd, false);
+		debug(data->key + " with fd " + std::to_string(data->fd) + " session from " + data->IP + " closed, open sessions " + std::to_string(_clients.size() - 1));
+
+		_clients.erase(data->key);
+		delete data;
 	}
 
 	void Sockets::close(int fd, bool main)

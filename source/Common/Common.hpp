@@ -23,7 +23,7 @@ namespace Orpy
 
 	struct HTTPData
 	{
-		HTTPData(int p = 0, int clientfd = -1, std::string k = "") : fd(clientfd), key(k), phase(p), length(0), buffer({}) {}
+		HTTPData(int p = 0, int clientfd = -1, std::string k = "", std::string ip = "") : fd(clientfd), key(k), phase(p), IP(ip), length(0), buffer({}) {}
 
 		~HTTPData() {}
 

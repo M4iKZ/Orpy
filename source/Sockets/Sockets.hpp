@@ -100,6 +100,9 @@ namespace Orpy
 					
 		void clear(std::string);
 
+		void addClient(HTTPData*);
+		void clearClient(HTTPData*);
+
 		// Sends a file
 		void sendFile(HTTPData*);
 
@@ -109,7 +112,7 @@ namespace Orpy
 		int _activeworkers = 0;
 
 		ThreadSynchronization<std::string> _sync;
-		std::unordered_map<std::string, HTTPData> _clients;
+		std::unordered_map<std::string, HTTPData*> _clients;
 
 		std::mutex mutex;
 

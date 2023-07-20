@@ -51,6 +51,13 @@ namespace Orpy
             return ptr;
         }
 
+        int getPoolSize()
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            return q.size();
+        }
+
         void push(T ptr)
         {
             {
