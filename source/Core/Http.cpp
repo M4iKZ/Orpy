@@ -35,56 +35,67 @@ namespace Orpy
 		debug("Core lib unloaded ...");
 	}
 
-	void Http::managePOST(HTTPData* data, HttpRequest* request)
+	void Http::managePOST(std::unique_ptr<HTTPData>& data)
 	{
-		if (request->isMultipart)
-			elaborateMultipart(data->buffer, request);
+		if (data->request.isMultipart)
+			elaborateMultipart(data);
 		else
-			getPOST(data->buffer, request);
+			getPOST(data);
 
-		if (request->response.location == "")
-			request->response.location = request->URI;
+		if (data->response.location == "")
+			data->response.location = data->request.URI;
 
-		request->response.status = 303; //REDIRECT FOR POST	
+		data->response.status = 303; //REDIRECT FOR POST	
 
 		//MANAGE HERE POST
 	}
 
-	void Http::generatePage(HttpRequest* request)
+	void Http::generatePage(std::unique_ptr<HTTPData>& data)
 	{
-		std::ifstream file(fs::current_path().string() + "/Data/" + request->Conf.path + "/style/main.style");
-		request->response.content.assign((std::istreambuf_iterator<char>(file)), (std::istreambuf_iterator<char>()));
-		file.close();
+		std::ifstream file(fs::current_path().string() + "/Data/" + data->Conf.path + "/style/main.style", std::ios::binary);
+		if (file)
+		{
+			// Get the file size
+			file.seekg(0, std::ios::end);
+			std::streampos fileSize = file.tellg();
+			file.seekg(0, std::ios::beg);
 
-		if (request->response.content_type == "")
-			request->response.content_type = "html";
+			// Read the entire file into the content string
+			data->response.content.resize(fileSize);
+			file.read(&data->response.content[0], fileSize);
 
-		getType(request, request->response.content_type);
+			file.close();
+		}
+
+		if (data->response.content_type.empty())
+			data->response.content_type = "html";
+
+		getType(data);
 	}
 
-	void Http::prepareFile(HttpRequest* request, HTTPData* response)
+	void Http::prepareFile(std::unique_ptr<HTTPData>& data)
 	{
-		std::filesystem::path file_path(request->URL);
-		std::string file_extension = file_path.extension().string().substr(1);
-		if (getType(request, file_extension))
+		std::filesystem::path file_path(data->request.URL);
+		data->response.content_type = file_path.extension().string().substr(1);		
+		if (getType(data))
 		{
 			// Stored File
-			std::filesystem::file_time_type ftime = std::filesystem::last_write_time(request->filePath);
+			std::filesystem::file_time_type ftime = std::filesystem::last_write_time(data->request.filePath);
 			std::time_t fileUnixtime = std::chrono::system_clock::to_time_t(std::chrono::time_point_cast<std::chrono::system_clock::duration>(ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()));
 
 			std::tm fileTime = *std::gmtime(&fileUnixtime);
 			std::ostringstream filess;
 			filess << std::put_time(&fileTime, "%a, %d %b %Y %T GMT");
 
-			response->isFile = true;
-			request->response.fileLastEdit = filess.str();
+			data->response.isFile = true;
+			data->response.fileLastEdit = filess.str();
 
 			// Cached File
 			// Define the format of the input date and time string
 			std::string format = "%a, %d %b %Y %H:%M:%S %Z";
 
 			// Create an input string stream from the date string
-			std::istringstream iss(request->fileModifiedSince);
+			std::istringstream iss(data->request.fileModifiedSince);
 
 			// Create tm structure to store parsed values
 			std::tm timeStruct = {};
@@ -98,54 +109,94 @@ namespace Orpy
 
 			if (cachedUnixtime < fileUnixtime)
 			{
-				response->phase = 3; //SEND FILE
+				data->phase = 3; //SEND FILE
 
-				response->fileName = request->filePath;
-				response->fileSize = std::filesystem::file_size(response->fileName);
-
-				request->response.isFile = response->isFile;
-
-				request->response.content_type = file_extension;
-				request->response.content_length = response->fileSize;
+				data->response.fileName = data->request.filePath;
+				data->response.fileSize = std::filesystem::file_size(data->response.fileName);
+				
+				data->response.content_length = data->response.fileSize;				
 			}
 			else
-				request->response.status = 304;
+				data->response.status = 304;
 		}
 		else
-			request->response.status = 404;
+			data->response.status = 404;
 	}
 
-	void Http::elaborateData(HTTPData* data)
+	// Generates the response buffer from the fields in the struct
+	int Http::getBuffer(HttpResponse* data, std::vector<char>& buffer)
 	{
-		HttpRequest* request = new HttpRequest();
-		parser(request, data->buffer);
+		std::ostringstream response;
 
-		if (request->clientIP == "")
-			request->clientIP = data->IP;
+		// HTTP Status Line
+		response << "HTTP/1.1 " << HttpResponses.at(data->status) << "\r\n";
 
-		if (!request->error)
+		// Server information
+		response << "Server: Orpy by M4iKZ\r\n";
+
+		if (data->status == 301 || data->status == 302 || data->status == 303 || data->status == 307)
 		{
-			check_URL(request);
-						
-			if (request->isPOST)
-				managePOST(data, request);
+			// Redirection response
+			response << "Location: " << data->location << "\r\n";
+		}
+		else
+		{
+			// Regular response
+			response << "Content-Type: " << data->content_type << "\r\n";
 
-			if (request->response.status == 200 && !request->error && !request->done)
+			if (!data->attachmentName.empty())
 			{
-				if (!request->isFile)
-					generatePage(request);
+				// Download file instead of showing it
+				response << "Content-Disposition: attachment; filename=" << data->attachmentName << "\r\n";
+			}
 
-				if (request->isFile)
-					//prepareFile(request, response);
-					prepareFile(request, data);
+			if (!data->content.empty() && data->content_length == 0)
+				data->content_length = data->content.size();
+
+			response << "Content-Length: " << data->content_length << "\r\n";
+
+			if (data->isFile)
+			{
+				response << "Last-Modified: " << data->fileLastEdit << "\r\n";
+				response << "Cache-Control: must-revalidate\r\n";
+			}
+		}
+
+		response << "\r\n";
+
+		// Convert the response string to a vector of characters
+		std::string responseStr = response.str();
+		buffer.insert(buffer.begin(), responseStr.begin(), responseStr.end());
+
+		if (!data->content.empty())
+			buffer.insert(buffer.end(), data->content.begin(), data->content.end());
+
+		// Calculate the total length of the buffer		
+		return buffer.size();
+	}
+
+	void Http::elaborateData(std::unique_ptr<HTTPData>& data)
+	{
+		parser(data);
+
+		if (!data->error)
+		{
+			check_URL(data);
+						
+			if (data->request.isPOST)
+				managePOST(data);
+
+			if (data->response.status == 200 && !data->error && !data->request.done)
+			{
+				if (!data->request.isFile)
+					generatePage(data);
+
+				if (data->request.isFile)
+					prepareFile(data);
 			}
 		}
 
 		data->buffer.clear();
-
-		request->response.getBuffer(data->buffer);
-		data->length = request->response.bufferSize;
-
-		delete request;
+		data->length = getBuffer(&data->response, data->buffer);
 	}
 }

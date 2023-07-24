@@ -1,8 +1,5 @@
 #pragma once
 
-#include "Common.hpp"
-#include "Response.hpp"
-
 namespace Orpy
 {
     struct MP_DATA
@@ -18,29 +15,20 @@ namespace Orpy
 
     struct HttpRequest
     {
-        int position = 0;
-
         std::string method = "";
 
         // IP
         std::string clientIP = "";
 
-        // User-Agent
+        // User-Agent / Bot
         std::string useragent = "";
         bool isBot = false;
 
-        // User
-        std::string session_id = "";
-        std::string userid = "";
-
         // URL
         std::string URI = "";
-        std::string URL = "";
-        std::string URLname = ""; // for multilingual commands
+        std::string URL = "";        
         std::vector<std::string> commands;
         int nCommands = 0;
-
-        std::string command_id = "";
 
         // Host
         std::string Host = "";
@@ -51,8 +39,8 @@ namespace Orpy
         // Origin
         std::string Origin = "";
 
-        // Encoding
-        // deflate and gzip not supported yet
+        // Supported Encoding
+        // not implemented yet
         bool br = false;
 
         // Content-Length
@@ -79,14 +67,5 @@ namespace Orpy
         bool isFile = false;
         std::string filePath = "";
         std::string fileModifiedSince = "";
-
-        // Error
-        bool error = false;
-
-        // Conf
-        SITEData Conf;
-
-        // Repsponse
-        HttpResponse response; // MUST BE MOVED FROM HERE
     };
 }

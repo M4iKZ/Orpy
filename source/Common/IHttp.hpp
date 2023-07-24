@@ -9,7 +9,7 @@ namespace Orpy
 	public:
 		virtual ~IHttp() = default;
 			
-		virtual void elaborateData(HTTPData*) = 0;	
+		virtual void elaborateData(std::unique_ptr<HTTPData>&) = 0;
 	};
 
 	extern "C" 

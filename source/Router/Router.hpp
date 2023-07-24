@@ -4,5 +4,5 @@
 
 namespace Orpy
 {
-	void check_URL(HttpRequest*);
+	void check_URL(std::unique_ptr<HTTPData>&);
 }

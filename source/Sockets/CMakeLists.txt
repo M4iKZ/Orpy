@@ -9,21 +9,21 @@ set(LIBRARY_BINARY ${CMAKE_BINARY_DIR}/${PROJECT_NAME}/${CMAKE_SHARED_LIBRARY_PR
 
 # Add the Sockets library
 if(WIN32)
-  add_library(Sockets SHARED ${PROJECT_SOURCE_DIR}/Sockets.cpp ${PROJECT_SOURCE_DIR}/Sockets.def)  
+  add_library(${PROJECT_NAME} SHARED ${PROJECT_SOURCE_DIR}/Sockets.cpp ${PROJECT_SOURCE_DIR}/Sockets.def)  
 elseif(UNIX AND NOT APPLE)
-  add_library(Sockets SHARED ${PROJECT_SOURCE_DIR}/Sockets.cpp)  
+  add_library(${PROJECT_NAME} SHARED ${PROJECT_SOURCE_DIR}/Sockets.cpp)  
   set_target_properties(Sockets PROPERTIES LINK_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--version-script=${PROJECT_SOURCE_DIR}/Sockets.map")  
 endif()
 
-# Include Pool folder to Sockets lib
-target_include_directories(Sockets PRIVATE ../Pool/)
+# Include Pool
+target_include_directories(${PROJECT_NAME} PRIVATE ../Pool/)
 
 if(UNIX AND NOT APPLE)
-  target_link_libraries(Sockets pthread)
+  target_link_libraries(${PROJECT_NAME} pthread)
 endif()
 
 if(WIN32)  
-  install(TARGETS Sockets RUNTIME DESTINATION "${CMAKE_SOURCE_DIR}/_install/windows/Core")  
+  install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "${CMAKE_SOURCE_DIR}/_install/windows/Core")  
 else()
   install(FILES ${LIBRARY_BINARY} DESTINATION "${CMAKE_SOURCE_DIR}/_install/linux/Core")  
 endif()

@@ -5,59 +5,58 @@
 #include <variant>
 
 #include "Common.hpp"
-#include "Request.hpp"
 
 namespace Orpy
 {
-	void check_if_file_accessible(HttpRequest* request)
+	void check_if_file_accessible(std::unique_ptr<HTTPData>& data)
 	{
-		std::string url = request->URL.substr(1);
-		if (url == "")
+		std::string url = data->request.URL.substr(1);
+		if (url == "" || url[0] == '/')
 			return;
 
-		std::string path = std::filesystem::current_path().string() + "/Data/" + request->Conf.path + url;
+		std::string path = std::filesystem::current_path().string() + "/Data/" + data->Conf.path + url;
 		if (std::filesystem::exists(path))
 		{
-			request->isFile = true;
-			request->filePath = path;
+			data->request.isFile = true;
+			data->request.filePath = path;
 		}
 	}
 
-	void check_url_from_conf(HttpRequest* request)
+	void check_url_from_conf(std::unique_ptr<HTTPData>& data)
 	{
-		if (std::find(request->Conf.urls.begin(), request->Conf.urls.end(), request->commands.at(0)) != request->Conf.urls.end())
+		if (std::find(data->Conf.urls.begin(), data->Conf.urls.end(), data->request.commands.at(0)) != data->Conf.urls.end())
 		{
-			check_if_file_accessible(request);
+			check_if_file_accessible(data);
 			return;
 		}
-		else if (request->Conf.allowFiles)
+		else if (data->Conf.allowFiles)
 		{
-			check_if_file_accessible(request);
+			check_if_file_accessible(data);
 
-			if (request->isFile)
+			if (data->request.isFile)
 				return;
 		}
 
-		request->error = true;
-		request->response.status = 404;
+		data->error = true;
+		data->response.status = 404;
 	}
 
-	void checker(HttpRequest* request)
+	void checker(std::unique_ptr<HTTPData>& data)
 	{
-		if ((request->Conf.urls.size() > 0 && request->nCommands > 0) || request->nCommands == 0)
-			check_url_from_conf(request);
+		if ((data->Conf.urls.size() > 0 && data->request.nCommands > 0) || data->request.nCommands == 0)
+			check_url_from_conf(data);
 		else
 		{
-			request->error = true;
-			request->response.status = 404;
+			data->error = true;
+			data->response.status = 404;
 		}
 	}
 
-	void check_URL(HttpRequest* request)
+	void check_URL(std::unique_ptr<HTTPData>& data)
 	{
-		checker(request);
+		checker(data);
 
-		if (request->isFile)
+		if (data->request.isFile)
 			return;
 	}
 }

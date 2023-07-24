@@ -6,7 +6,6 @@
 #include <cctype>
 
 #include "Parser.hpp"
-
 #include "IConfs.hpp"
 
 namespace Orpy
@@ -84,189 +83,189 @@ namespace Orpy
         }
     }
 
-    State parse(State current_state, std::vector<char> buffer, HttpRequest* request)
+    State parse(State current_state, std::unique_ptr<HTTPData>& data)
     {
         switch (current_state)
         {
         case READ_METHOD:
-            if (buffer[request->position] == 'G' && buffer[request->position + 1] == 'E' && buffer[request->position + 2] == 'T')
+            if (data->buffer[data->position] == 'G' && data->buffer[data->position + 1] == 'E' && data->buffer[data->position + 2] == 'T')
             {
                 //GET
-                request->method = "GET";
+                data->request.method = "GET";
 
-                request->position += 4;
+                data->position += 4;
 
                 return READ_URI;
             }
-            else if (buffer[request->position] == 'P' && buffer[request->position + 1] == 'O' && buffer[request->position + 2] == 'S' && buffer[request->position + 3] == 'T')
+            else if (data->buffer[data->position] == 'P' && data->buffer[data->position + 1] == 'O' && data->buffer[data->position + 2] == 'S' && data->buffer[data->position + 3] == 'T')
             {
-                request->method = "POST";
+                data->request.method = "POST";
 
-                request->isPOST = true;
+                data->request.isPOST = true;
 
-                request->position += 5;
+                data->position += 5;
 
                 return READ_URI;
             }
 
-            request->response.status = 501; //not implemented
+            data->response.status = 501; //not implemented
 
             return ERROR;
             break;
         case READ_URI:
-            if (buffer[request->position] == '?')
+            if (data->buffer[data->position] == '?')
             {
-                request->hasGET = true;
+                data->request.hasGET = true;
 
-                ++request->position;
+                ++data->position;
 
                 // ?v=hKXVqnEIBh0&list=RDQM58p3c0RNCrI&index=9
                 std::string key = "";
-                while (buffer[request->position] != 32)
+                while (data->buffer[data->position] != 32)
                 {
-                    if (buffer[request->position] == '=')
+                    if (data->buffer[data->position] == '=')
                     {
-                        ++request->position; //jump =
+                        ++data->position; //jump =
 
-                        while (buffer[request->position] != '&' && buffer[request->position] != 32)
+                        while (data->buffer[data->position] != '&' && data->buffer[data->position] != 32)
                         {
-                            request->GET[key].push_back(buffer[request->position]);
+                            data->request.GET[key].push_back(data->buffer[data->position]);
 
-                            ++request->position;
+                            ++data->position;
                         }
 
-                        urlDecode(request->GET[key]);
+                        urlDecode(data->request.GET[key]);
 
-                        if (buffer[request->position] == 32)
+                        if (data->buffer[data->position] == 32)
                             break;
 
                         key = "";
                     }
                     else
-                        key.push_back(buffer[request->position]);
+                        key.push_back(data->buffer[data->position]);
 
-                    ++request->position;
+                    ++data->position;
                 }
 
                 return READ_PROTOCOL;
             }
-            else if (buffer[request->position] == '%')
+            else if (data->buffer[data->position] == '%')
             {
-                if (request->position + 2 < buffer.size())
+                if (data->position + 2 < data->buffer.size())
                 {
-                    if (std::isdigit(buffer[request->position + 1]) && std::isdigit(buffer[request->position + 2]))
+                    if (std::isdigit(data->buffer[data->position + 1]) && std::isdigit(data->buffer[data->position + 2]))
                     {
                         std::string hex;
-                        hex.push_back(buffer[request->position + 1]);
-                        hex.push_back(buffer[request->position + 2]);
+                        hex.push_back(data->buffer[data->position + 1]);
+                        hex.push_back(data->buffer[data->position + 2]);
 
-                        request->URI.push_back(buffer[request->position]);
-                        request->URI.push_back(buffer[request->position + 1]);
-                        request->URI.push_back(buffer[request->position + 2]);
+                        data->request.URI.push_back(data->buffer[data->position]);
+                        data->request.URI.push_back(data->buffer[data->position + 1]);
+                        data->request.URI.push_back(data->buffer[data->position + 2]);
 
                         int value = std::stoi(hex, nullptr, 16);
                         std::string character;
                         character.push_back(static_cast<char>(value));
-                        request->URL += character;
-                        request->commands[request->nCommands - 1] += character;
+                        data->request.URL += character;
+                        data->request.commands[data->request.nCommands - 1] += character;
 
-                        request->position += 3;
+                        data->position += 3;
                     }
                     else
                     {
-                        request->URI.push_back(buffer[request->position]);
-                        request->URL.push_back(buffer[request->position]);
-                        request->commands[request->nCommands - 1].push_back(buffer[request->position]);
+                        data->request.URI.push_back(data->buffer[data->position]);
+                        data->request.URL.push_back(data->buffer[data->position]);
+                        data->request.commands[data->request.nCommands - 1].push_back(data->buffer[data->position]);
 
-                        ++request->position;
+                        ++data->position;
                     }
                 }
             }
             else
             {
-                if (buffer[request->position] == '/')
+                if (data->buffer[data->position] == '/')
                 {
-                    request->nCommands++;
-                    request->commands.push_back("");
+                    data->request.nCommands++;
+                    data->request.commands.push_back("");
                 }
                 else
                 {
-                    request->commands[request->nCommands - 1].push_back(buffer[request->position]);
+                    data->request.commands[data->request.nCommands - 1].push_back(data->buffer[data->position]);
                 }
 
-                request->URI.push_back(buffer[request->position]);
-                request->URL.push_back(buffer[request->position]);
+                data->request.URI.push_back(data->buffer[data->position]);
+                data->request.URL.push_back(data->buffer[data->position]);
 
-                ++request->position;
+                ++data->position;
             }
 
-            if (buffer[request->position] == ' ') //(isspace(buffer[request->position]))
+            if (data->buffer[data->position] == ' ') 
                 return READ_PROTOCOL;
             else
                 return READ_URI;
 
             break;
         case READ_PROTOCOL:
-            if (buffer[request->position] == '\r' && buffer[request->position + 1] == '\n')
+            if (data->buffer[data->position] == '\r' && data->buffer[data->position + 1] == '\n')
             {
-                request->position += 2;
+                data->position += 2;
 
                 return READ_HEADERS;
             }
             else
             {
-                ++request->position;
+                ++data->position;
 
                 return READ_PROTOCOL;
             }
 
             break;
         case READ_HEADERS:
-            if ((buffer[request->position] == 'H' || buffer[request->position] == 'h') && buffer[request->position + 1] == 'o' && buffer[request->position + 3] == 't')
+            if ((data->buffer[data->position] == 'H' || data->buffer[data->position] == 'h') && data->buffer[data->position + 1] == 'o' && data->buffer[data->position + 3] == 't')
             {
                 //Host
-                request->position += 6;
+                data->position += 6;
 
-                request->Host = getValue(buffer, request->position, true);
+                data->request.Host = getValue(data->buffer, data->position, true);
 
-                if (!_confs->Get(request->Host, request->Conf))
+                if (!_confs->Get(data->request.Host, data->Conf))
                 {
-                    request->response.status = 444;
+                    data->response.status = 444;
 
                     return ERROR;
                 }
 
-                if (request->Conf.redirect != "")
+                if (data->Conf.redirect != "")
                 {
-                    request->response.status = 303;
-                    request->response.location = request->Conf.redirect + request->URI;
+                    data->response.status = 303;
+                    data->response.location = data->Conf.redirect + data->request.URI;
 
                     return ERROR;
                 }
 
                 return READ_HEADERS;
             }
-            else if ((buffer[request->position] == 'A' || buffer[request->position] == 'a') && buffer[request->position + 13] == 'n' && buffer[request->position + 14] == 'g')
+            else if ((data->buffer[data->position] == 'A' || data->buffer[data->position] == 'a') && data->buffer[data->position + 13] == 'n' && data->buffer[data->position + 14] == 'g')
             {
                 //Accept-Encoding: gzip, deflate, br
-                request->position += 16;
+                data->position += 16;
 
-                while (buffer[request->position] != '\r' && buffer[request->position + 1] != '\n')
+                while (data->buffer[data->position] != '\r' && data->buffer[data->position + 1] != '\n')
                 {
-                    if (buffer[request->position] == 'b' && buffer[request->position + 1] == 'r')
-                        request->br = true;
+                    if (data->buffer[data->position] == 'b' && data->buffer[data->position + 1] == 'r')
+                        data->request.br = true;
 
-                    ++request->position;
+                    ++data->position;
                 }
 
-                request->position += 2; //Remove \r\n
+                data->position += 2; //Remove \r\n
 
                 return READ_HEADERS;
             }
-            else if (request->isPOST && (buffer[request->position] == 'C' || buffer[request->position] == 'c') && buffer[request->position + 7] == '-' && buffer[request->position + 8] == 'T' && buffer[request->position + 9] == 'y' && buffer[request->position + 10] == 'p' && buffer[request->position + 11] == 'e')
+            else if (data->request.isPOST && (data->buffer[data->position] == 'C' || data->buffer[data->position] == 'c') && data->buffer[data->position + 7] == '-' && data->buffer[data->position + 8] == 'T' && data->buffer[data->position + 9] == 'y' && data->buffer[data->position + 10] == 'p' && data->buffer[data->position + 11] == 'e')
             {
                 // Content-Type: application/x-www-form-urlencoded
-                request->position += 14;
+                data->position += 14;
 
                 /*
                 0 : application/x-www-form-urlencoded
@@ -279,22 +278,22 @@ namespace Orpy
 
                 // Content-Type: multipart/form-data; boundary=[boundary string]
 
-                if (buffer[request->position] == 'm' && buffer[request->position + 18] == 'a')
+                if (data->buffer[data->position] == 'm' && data->buffer[data->position + 18] == 'a')
                 {
-                    request->position += 30;
+                    data->position += 30;
 
-                    request->isMultipart = true;
-                    request->boundary = "--";
-                    request->boundary += getValue(buffer, request->position);
+                    data->request.isMultipart = true;
+                    data->request.boundary = "--";
+                    data->request.boundary += getValue(data->buffer, data->position);
                 }
                 else
                 {
-                    request->contentType = getValue(buffer, request->position);
+                    data->request.contentType = getValue(data->buffer, data->position);
 
-                    if (request->contentType.find("application/x-www-form-urlencoded") != 0)
+                    if (data->request.contentType.find("application/x-www-form-urlencoded") != 0)
                     {
-                        request->isPOST = false;
-                        request->response.status = 501; //not implemented                        
+                        data->request.isPOST = false;
+                        data->response.status = 501; //not implemented                        
 
                         return ERROR;
                     }
@@ -302,56 +301,56 @@ namespace Orpy
 
                 return READ_HEADERS;
             }
-            else if (request->isPOST && (buffer[request->position] == 'C' || buffer[request->position] == 'c') && buffer[request->position + 12] == 't' && buffer[request->position + 13] == 'h')
+            else if (data->request.isPOST && (data->buffer[data->position] == 'C' || data->buffer[data->position] == 'c') && data->buffer[data->position + 12] == 't' && data->buffer[data->position + 13] == 'h')
             {
                 //Content-Length: 37    
-                request->position += 16;
+                data->position += 16;
 
-                request->contentLength = std::stoi(getValue(buffer, request->position));
+                data->request.contentLength = std::stoi(getValue(data->buffer, data->position));
 
                 return READ_HEADERS;
             }
-            else if ((buffer[request->position] == 'C' || buffer[request->position] == 'c') && buffer[request->position + 4] == 'i' && buffer[request->position + 5] == 'e')
+            else if ((data->buffer[data->position] == 'C' || data->buffer[data->position] == 'c') && data->buffer[data->position + 4] == 'i' && data->buffer[data->position + 5] == 'e')
             {
                 //Cookie: session_id=abc123; user_id=1;
-                request->position += 8;
+                data->position += 8;
 
                 std::string value;
                 std::string key;
                 while (1)
                 {
-                    if (buffer[request->position] == '=')
+                    if (data->buffer[data->position] == '=')
                     {
-                        request->cookies[value] = "";
+                        data->request.cookies[value] = "";
                         key = value;
                         value = "";
                     }
-                    else if (buffer[request->position] == ';' || buffer[request->position] == '\r')
+                    else if (data->buffer[data->position] == ';' || data->buffer[data->position] == '\r')
                     {
-                        request->cookies[key] = value;
+                        data->request.cookies[key] = value;
                         value = "";
 
-                        if (buffer[request->position] == '\r')
+                        if (data->buffer[data->position] == '\r')
                             break;
 
-                        request->position++; //jump the space?
+                        data->position++; //jump the space?
                     }
                     else
                     {
-                        value.push_back(buffer[request->position]);
+                        value.push_back(data->buffer[data->position]);
                     }
 
-                    request->position++;
+                    data->position++;
                 }
 
                 return READ_HEADERS;
             }
-            else if ((buffer[request->position] == 'O' || buffer[request->position] == 'o') && buffer[request->position + 1] == 'r' && buffer[request->position + 2] == 'i' && buffer[request->position + 3] == 'g' && buffer[request->position + 4] == 'i' && buffer[request->position + 6] == ':')
+            else if ((data->buffer[data->position] == 'O' || data->buffer[data->position] == 'o') && data->buffer[data->position + 1] == 'r' && data->buffer[data->position + 2] == 'i' && data->buffer[data->position + 3] == 'g' && data->buffer[data->position + 4] == 'i' && data->buffer[data->position + 6] == ':')
             {
                 //Origin: http://localhost:8888
-                request->position += 8;
+                data->position += 8;
 
-                std::string url = getValue(buffer, request->position);
+                std::string url = getValue(data->buffer, data->position);
                 std::string http = "http://";
                 std::string https = "https://";
 
@@ -363,61 +362,61 @@ namespace Orpy
                 if (url.find(":") != std::string::npos)
                     url.erase(url.find(":"), 1);
 
-                request->Origin = url;
+                data->request.Origin = url;
 
                 return READ_HEADERS;
             }
-            else if ((buffer[request->position] == 'R' || buffer[request->position] == 'r') && buffer[request->position + 6] == 'r')
+            else if ((data->buffer[data->position] == 'R' || data->buffer[data->position] == 'r') && data->buffer[data->position + 6] == 'r')
             {
                 //Referer: http://localhost:8888/
-                request->position += 9;
+                data->position += 9;
 
-                request->Referer = getValue(buffer, request->position);
+                data->request.Referer = getValue(data->buffer, data->position);
 
                 return READ_HEADERS;
             }
-            else if ((buffer[request->position] == 'I' || buffer[request->position] == 'i') && buffer[request->position + 2] == '-' && buffer[request->position + 11] == '-')
+            else if ((data->buffer[data->position] == 'I' || data->buffer[data->position] == 'i') && data->buffer[data->position + 2] == '-' && data->buffer[data->position + 11] == '-')
             {
                 //If-Modified-Since
-                request->position += 19;
+                data->position += 19;
 
-                request->fileModifiedSince = getValue(buffer, request->position);
+                data->request.fileModifiedSince = getValue(data->buffer, data->position);
 
                 return READ_HEADERS;
             }
-            else if (buffer[request->position] == 'I' && buffer[request->position + 1] == 'P')
+            else if (data->buffer[data->position] == 'I' && data->buffer[data->position + 1] == 'P')
             {
                 //IP
-                request->position += 4;
+                data->position += 4;
 
-                request->clientIP = getValue(buffer, request->position);
+                data->request.clientIP = getValue(data->buffer, data->position);
 
                 return READ_HEADERS;
             }
-            else if ((buffer[request->position] == 'U' || buffer[request->position] == 'u') && buffer[request->position + 4] == '-')
+            else if ((data->buffer[data->position] == 'U' || data->buffer[data->position] == 'u') && data->buffer[data->position + 4] == '-')
             {
                 //User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36
-                request->position += 12;
+                data->position += 12;
 
-                request->useragent = getValue(buffer, request->position);
+                data->request.useragent = getValue(data->buffer, data->position);
 
-                std::string useragent = request->useragent;
+                std::string useragent = data->request.useragent;
                 std::transform(useragent.begin(), useragent.end(), useragent.begin(), ::tolower); // find() is case sensitive, check lower string instead
 
                 if (useragent.find("bot") != std::string::npos || useragent.find("crawler") != std::string::npos || useragent.find("spider") != std::string::npos)
-                    request->isBot = true;
+                    data->request.isBot = true;
 
                 return READ_HEADERS;
             }
-            else if (buffer[request->position] == '\r' && buffer[request->position + 1] == '\n' && buffer[request->position + 2] == '\r' && buffer[request->position + 3] == '\n')
+            else if (data->buffer[data->position] == '\r' && data->buffer[data->position + 1] == '\n' && data->buffer[data->position + 2] == '\r' && data->buffer[data->position + 3] == '\n')
             {
-                request->position += 4;
+                data->position += 4;
 
                 return DONE;
             }
             else
             {
-                ++request->position;
+                ++data->position;
 
                 return READ_HEADERS;
             }
@@ -432,91 +431,91 @@ namespace Orpy
         return ERROR;
     }
 
-    void parser(HttpRequest* request, std::vector<char>& buffer)
+    void parser(std::unique_ptr<HTTPData>& data)
     {
         State current_state = READ_METHOD;
-        while (request->position < buffer.size())
+        while (data->position < data->buffer.size())
         {
-            current_state = parse(current_state, buffer, request);
+            current_state = parse(current_state, data);
 
             if (current_state == DONE)
                 break;
             else if (current_state == ERROR)
             {
-                request->error = true;
+                data->error = true;
                 break;
             }
         }
     }
 
-    bool getType(HttpRequest* request, std::string& format)
+    bool getType(std::unique_ptr<HTTPData>& data)
     {
         //CUSTOM SITE MIME TYPES
-        auto conf = request->Conf.mimetypes.find(format);
-        if (conf != request->Conf.mimetypes.end())
+        auto conf = data->Conf.mimetypes.find(data->response.content_type);
+        if (conf != data->Conf.mimetypes.end())
         {
-            format = conf->second;
+            data->response.content_type = conf->second;
             return true;
         }
 
         //ORPY DEFAULT MIME TYPES
-        auto it = ContentTypeMapping.find(format);
+        auto it = ContentTypeMapping.find(data->response.content_type);
         if (it == ContentTypeMapping.end())
             return false;
 
-        format = it->second;
+        data->response.content_type = it->second;
 
         return true;
     }
 
-    void getPOST(std::vector<char>& buffer, HttpRequest* request)
+    void getPOST(std::unique_ptr<HTTPData>& data)
     {
         //formType=Form-Url-Encoded&name=&email=        
-        if (request->position < buffer.size())
+        if (data->position < data->buffer.size())
         {
             std::string key = "";
 
-            while (buffer[request->position] != '\r' && buffer[request->position + 1] != '\n' && request->position + 1 < buffer.size())
+            while (data->buffer[data->position] != '\r' && data->buffer[data->position + 1] != '\n' && data->position + 1 < data->buffer.size())
             {
-                if (buffer[request->position] == '=')
+                if (data->buffer[data->position] == '=')
                 {
-                    ++request->position; //jump =
+                    ++data->position; //jump =
 
-                    while (buffer[request->position] != '&' && buffer[request->position] != '\r' && request->position < buffer.size())
+                    while (data->buffer[data->position] != '&' && data->buffer[data->position] != '\r' && data->position < data->buffer.size())
                     {
-                        request->POST[key].push_back(buffer[request->position]);
+                        data->request.POST[key].push_back(data->buffer[data->position]);
 
-                        ++request->position;
+                        ++data->position;
                     }
 
-                    urlDecode(request->POST[key]);
+                    urlDecode(data->request.POST[key]);
 
                     key = "";
                 }
                 else
-                    key.push_back(buffer[request->position]);
+                    key.push_back(data->buffer[data->position]);
 
-                ++request->position;
+                ++data->position;
             }
         }
     }
 
-    void elaborateMultipart(std::vector<char>& buffer, HttpRequest* request)
+    void elaborateMultipart(std::unique_ptr<HTTPData>& data)
     {
         bool work = true;
         MULTIPARTState state = HEADER;
-        MP_DATA data;
+        MP_DATA mpdata;
         std::string boundary = "";
         std::string line = "";
-        int position = request->position;
+        int position = data->position;
         while (work)
         {
             switch (state)
             {
             case HEADER:
-                boundary = getValue(buffer, request->position);
+                boundary = getValue(data->buffer, data->position);
 
-                if (boundary == request->boundary)
+                if (boundary == data->request.boundary)
                 {
                     state = DISPOSITION;
                 }
@@ -524,18 +523,18 @@ namespace Orpy
                     state = FINISH;
                 break;
             case DISPOSITION:
-                if (buffer[request->position] == 'C' && buffer[request->position + 18] == 'n')
+                if (data->buffer[data->position] == 'C' && data->buffer[data->position + 18] == 'n')
                 {
-                    request->position += 21;
+                    data->position += 21;
 
-                    while (buffer[request->position] != ';')
+                    while (data->buffer[data->position] != ';')
                     {
-                        data.Disposition.push_back(buffer[request->position]);
+                        mpdata.Disposition.push_back(data->buffer[data->position]);
 
-                        ++request->position;
+                        ++data->position;
                     }
 
-                    request->position += 2; //jump the space
+                    data->position += 2; //jump the space
 
                     state = NAME;
                 }
@@ -543,24 +542,24 @@ namespace Orpy
                     state = FINISH;
                 break;
             case NAME:
-                if (buffer[request->position] == 'n' && buffer[request->position + 3] == 'e')
+                if (data->buffer[data->position] == 'n' && data->buffer[data->position + 3] == 'e')
                 {
-                    request->position += 6;
+                    data->position += 6;
 
-                    while (buffer[request->position] != '"')
+                    while (data->buffer[data->position] != '"')
                     {
-                        data.name.push_back(buffer[request->position]);
+                        mpdata.name.push_back(data->buffer[data->position]);
 
-                        ++request->position;
+                        ++data->position;
                     }
 
-                    request->position += 3; //jump the space
+                    data->position += 3; //jump the space
 
-                    if (buffer[request->position] == '\r')
+                    if (data->buffer[data->position] == '\r')
                     {
                         state = DATA;
 
-                        request->position += 2; //jump \r\n
+                        data->position += 2; //jump \r\n
                     }
                     else
                     {
@@ -571,21 +570,21 @@ namespace Orpy
                     state = FINISH;
                 break;
             case FILE:
-                if (buffer[request->position] == 'f' && buffer[request->position + 7] == 'e')
+                if (data->buffer[data->position] == 'f' && data->buffer[data->position + 7] == 'e')
                 {
-                    request->position += 10;
+                    data->position += 10;
 
-                    while (buffer[request->position] != '"')
+                    while (data->buffer[data->position] != '"')
                     {
-                        data.filename.push_back(buffer[request->position]);
+                        mpdata.filename.push_back(data->buffer[data->position]);
 
-                        ++request->position;
+                        ++data->position;
                     }
 
-                    if (data.filename != "")
-                        data.isFile = true;
+                    if (mpdata.filename != "")
+                        mpdata.isFile = true;
 
-                    request->position += 3;
+                    data->position += 3;
 
                     state = TYPE;
                 }
@@ -593,13 +592,13 @@ namespace Orpy
                     state = FINISH;
                 break;
             case TYPE:
-                if (buffer[request->position] == 'C' && buffer[request->position + 11] == 'e')
+                if (data->buffer[data->position] == 'C' && data->buffer[data->position + 11] == 'e')
                 {
-                    request->position += 14;
+                    data->position += 14;
 
-                    data.type = getValue(buffer, request->position);
+                    mpdata.type = getValue(data->buffer, data->position);
 
-                    request->position += 2; //jump \r\n
+                    data->position += 2; //jump \r\n
 
                     state = DATA;
                 }
@@ -609,28 +608,28 @@ namespace Orpy
             case DATA:
                 while (true)
                 {
-                    line.push_back(buffer[request->position]);
+                    line.push_back(data->buffer[data->position]);
 
-                    if (buffer[request->position] == '\r')
+                    if (data->buffer[data->position] == '\r')
                     {
-                        line.push_back(buffer[request->position + 1]);
+                        line.push_back(data->buffer[data->position + 1]);
 
-                        data.data.insert(data.data.end(), line.begin(), line.end());
+                        mpdata.data.insert(mpdata.data.end(), line.begin(), line.end());
 
                         line = "";
 
-                        request->position += 2;
+                        data->position += 2;
 
                         continue;
                     }
 
-                    ++request->position;
+                    ++data->position;
 
                     if (line == boundary)
                     {
                         //REMOVE \r\n
-                        data.data.pop_back();
-                        data.data.pop_back();
+                        mpdata.data.pop_back();
+                        mpdata.data.pop_back();
 
                         break;
                     }
@@ -641,10 +640,10 @@ namespace Orpy
                 state = END;
                 break;
             case END:
-                line = getValue(buffer, request->position);
+                line = getValue(data->buffer, data->position);
 
-                request->MULTIPART[data.name] = data;
-                data = {};
+                data->request.MULTIPART[mpdata.name] = mpdata;
+                mpdata = {};
 
                 if (line == "")
                 {

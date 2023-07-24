@@ -1,72 +1,59 @@
 #pragma once
 
-#include <iostream>
-#include <string>
-
-#include <vector>
-
+#include <queue>
 #include <mutex>
 #include <condition_variable>
 
 namespace Orpy
 {
     template<typename T>
-    struct ThreadSynchronization
+    class ThreadPool
     {
-    protected:
-
-        std::condition_variable condition;
-        std::mutex mutex;
-
-        std::vector<T> q;
-
     public:
-        bool isRunning = true;
-
-        void notifyClose()
+        void push(std::unique_ptr<T> data) 
         {
-            {
-                std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard<std::mutex> lock(mut);
+            q.push(std::move(data));
+            con.notify_one();
+        }
 
+        std::unique_ptr<T> pop() 
+        {
+            std::unique_ptr<T> data;
+            {
+                std::unique_lock<std::mutex> lock(mut);
+                con.wait(lock, [this]() { return !q.empty() || !isRunning; });
+
+                if (!isRunning)
+                    return nullptr;
+
+                data = std::move(q.front());
+                q.pop();
+            }
+
+            return data;
+        }
+
+        bool empty() const 
+        {
+            std::lock_guard<std::mutex> lock(mut);
+            return q.empty();
+        }
+
+        void stop() 
+        {
+            std::lock_guard<std::mutex> lock(mut);
+            {
                 isRunning = false;
             }
-
-            condition.notify_all();
+            
+            con.notify_all();
         }
 
-        T waitCondition(int id = 0)
-        {
-            T ptr;
-            {
-                std::unique_lock<std::mutex> lock(mutex);
-                condition.wait(lock, [this]() { if (q.empty()) q.shrink_to_fit(); return !q.empty() || !isRunning; });
-
-                if (isRunning)
-                {
-                    ptr = q.front();
-                    q.erase(q.begin());
-                }
-            }
-
-            return ptr;
-        }
-
-        int getPoolSize()
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-
-            return q.size();
-        }
-
-        void push(T ptr)
-        {
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-
-                q.push_back(ptr);
-            }
-
-            condition.notify_one();
-        }
+    private:
+        std::queue<std::unique_ptr<T>> q;
+        std::mutex mut;
+        std::condition_variable con;
+        bool isRunning = true;
     };
 }

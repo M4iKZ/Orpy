@@ -8,10 +8,10 @@
 
 namespace Orpy
 {
-	void getPOST(std::vector<char>&, HttpRequest*);	
-	void elaborateMultipart(std::vector<char>&, HttpRequest*);	
+	void getPOST(std::unique_ptr<HTTPData>&);
+	void elaborateMultipart(std::unique_ptr<HTTPData>&);
 
-	bool getType(HttpRequest*, std::string&);
+	bool getType(std::unique_ptr<HTTPData>&);
 
-	void parser(HttpRequest*, std::vector<char>&);	
+	void parser(std::unique_ptr<HTTPData>&);
 }

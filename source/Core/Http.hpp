@@ -22,14 +22,15 @@ namespace Orpy
 		DynamicLibrary<ISockets, IHttp*, const char*, int&> Sockets;		
 
 	private:
-		void managePOST(HTTPData*, HttpRequest*);
-		void generatePage(HttpRequest*);
-		void prepareFile(HttpRequest*, HTTPData*);
+		void managePOST(std::unique_ptr<HTTPData>&);
+		void generatePage(std::unique_ptr<HTTPData>&);
+		void prepareFile(std::unique_ptr<HTTPData>&);
+		int getBuffer(HttpResponse*, std::vector<char>&);
 
 	public:
 		Http();
 		~Http();
 				
-		void elaborateData(HTTPData*) override;		
+		void elaborateData(std::unique_ptr<HTTPData>&) override;
 	};
 }
