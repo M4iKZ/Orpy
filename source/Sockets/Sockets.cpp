@@ -215,18 +215,16 @@ namespace Orpy
 			}
 
 			if (!socketSetBlocking(client_fd, _block))
+			{
+				close(client_fd, false);
 				continue;
-			
-			char client_ip[INET_ADDRSTRLEN];
-			struct in_addr ipAddr = client_address.sin_addr;
-			inet_ntop(AF_INET, &ipAddr, client_ip, INET_ADDRSTRLEN);
-			
-			std::string ip(client_ip);
+			}
 
 			std::string key = std::to_string(client_fd);
-			
 			std::unique_ptr<HTTPData> client = std::make_unique<HTTPData>(0, client_fd, key);
-			client->IP = ip;
+
+			struct in_addr ipAddr = client_address.sin_addr;
+			inet_ntop(AF_INET, &ipAddr, client->IP.data(), INET_ADDRSTRLEN);
 
 			_queue.push(std::move(client));
 		}

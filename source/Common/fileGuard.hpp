@@ -24,7 +24,7 @@ namespace Orpy
 
     protected:
         C* _class;
-        std::string _path;
+        std::vector<std::string> _path;
 
         std::mutex _mutex;
         std::condition_variable _condition;
@@ -33,87 +33,112 @@ namespace Orpy
 
         std::map<fs::path, fs::file_time_type> last_modified;
 
-#ifdef _WIN32
         std::thread _guard;
-#else
-        pthread_t _guard;
 
-        static void* guardHelper(void* context)
-        {
-            reinterpret_cast<fileGuard<C>*>(context)->guardFolder();
-            return nullptr;
-        }
-#endif
     public:
 
-        fileGuard(C* c, std::string path) : _class(c), _path(path)
+        fileGuard(C* c, std::string path = "") : _class(c)
         {
-            if (!fs::exists(_path) || !fs::is_directory(_path))
+            if(!path.empty())
             {
-                std::cout << "Error: " << _path << " is not a valid directory" << std::endl;
-                return;
+                if (!fs::exists(path) || !fs::is_directory(path))
+                {
+                    std::cout << "Error: " << path << " is not a valid directory" << std::endl;
+                    return;
+                }
+
+                std::unique_lock<std::mutex> lock(_mutex);
+                {
+                    _path.push_back(path);
+                }
             }
 
             _isRunning = true;
 
-#ifdef _WIN32
             _guard = std::thread(&fileGuard<C>::guardFolder, this);
-#else
-            pthread_create(&_guard, nullptr, &fileGuard<C>::guardHelper, this);
-#endif
         }
 
         ~fileGuard()
         {
+            std::unique_lock<std::mutex> lock(_mutex);
             {
-                std::unique_lock<std::mutex> lock(_mutex);
-
                 _isRunning = false;
             }
 
             _condition.notify_all();
 
-#ifdef _WIN32
             if (_guard.joinable())
                 _guard.join();
-#else
-            pthread_join(_guard, NULL);
-#endif
+        }
+
+        void addPath(std::string path)
+        {
+            if (!fs::exists(path) || !fs::is_directory(path))
+            {
+                std::cout << "Error: " << path << " is not a valid directory" << std::endl;
+                return;
+            }
+
+            std::unique_lock<std::mutex> lock(_mutex);
+            {                
+                _path.push_back(path);
+            }
+        }
+
+        void removePath(std::string path)
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            {
+                _path.erase(std::remove(_path.begin(), _path.end(), path), _path.end());
+            }
+        }
+
+    private:
+
+        void ciclePath(std::string p)
+        {
+            for (const auto& entry : fs::recursive_directory_iterator(p))
+            {
+                if (fs::is_regular_file(entry))
+                {
+                    auto path = entry.path();
+                    auto last_write_time = fs::last_write_time(path);
+                    if (last_modified.find(path) == last_modified.end())
+                    {
+                        last_modified[path] = last_write_time;
+                        _class->New(path);
+                    }
+                    else if (last_modified[path] != last_write_time)
+                    {
+                        last_modified[path] = last_write_time;
+                        _class->Edited(path);
+                    }
+                }
+            }
+        }
+
+        void checkDelete()
+        {
+            for (auto it = last_modified.begin(); it != last_modified.end();)
+            {
+                if (!fs::exists(it->first))
+                {
+                    _class->Deleted(it->first.stem().string());
+                    it = last_modified.erase(it);
+                }
+                else
+                    ++it;
+            }
         }
 
         void guardFolder()
         {
             while (_isRunning)
             {
-                for (const auto& entry : fs::recursive_directory_iterator(_path))
-                {
-                    if (fs::is_regular_file(entry))
-                    {
-                        auto path = entry.path();
-                        auto last_write_time = fs::last_write_time(path);
-                        if (last_modified.find(path) == last_modified.end())
-                        {
-                            last_modified[path] = last_write_time;
-                            _class->New(path);
-                        }
-                        else if (last_modified[path] != last_write_time)
-                        {
-                            last_modified[path] = last_write_time;
-                            _class->Edited(path);
-                        }
-                    }
-                }
+                checkDelete();
 
-                for (auto it = last_modified.begin(); it != last_modified.end();)
-                {
-                    if (!fs::exists(it->first))
-                    {
-                        _class->Deleted(it->first.stem().string());
-                        it = last_modified.erase(it);                        
-                    }
-                    else
-                        ++it;
-                }
+                for(auto& p : _path)
+                    ciclePath(p);
 
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
