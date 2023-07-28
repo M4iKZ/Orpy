@@ -223,8 +223,10 @@ namespace Orpy
 			std::string key = std::to_string(client_fd);
 			std::unique_ptr<HTTPData> client = std::make_unique<HTTPData>(0, client_fd, key);
 
+			client->IP.resize(INET_ADDRSTRLEN);
 			struct in_addr ipAddr = client_address.sin_addr;
 			inet_ntop(AF_INET, &ipAddr, client->IP.data(), INET_ADDRSTRLEN);
+			client->IP.resize(strlen(client->IP.data()));
 
 			_queue.push(std::move(client));
 		}
