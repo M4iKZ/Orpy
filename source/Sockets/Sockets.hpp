@@ -82,7 +82,7 @@ namespace Orpy
 
 		int  socketInit();
 		bool socketSetBlocking(int, bool);
-		void  socketClose();
+		void socketClose();
 
 		bool setSocket(int, socket_t, sockaddr_in&, int&);
 
@@ -95,10 +95,11 @@ namespace Orpy
 		int Receive(std::unique_ptr<HTTPData>&, int&);
 		int Send(std::unique_ptr<HTTPData>&, int&);
 		
-		void clearClient(std::unique_ptr<HTTPData>&);
-
 		// Sends a file
 		bool sendFile(std::unique_ptr<HTTPData>&);
+
+		void clear(std::unique_ptr<HTTPData>&);
+		void closeClient(const socket_t&);
 
 		//thread vars
 		std::atomic<bool> _isRunning;		
@@ -114,6 +115,5 @@ namespace Orpy
 		~Sockets() override;
 
 		bool start(bool = false) override;
-		void close(int, bool = true) override;
 	};
 }

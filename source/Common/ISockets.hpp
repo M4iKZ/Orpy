@@ -9,8 +9,7 @@ namespace Orpy
 	public:
 		virtual ~ISockets() = default;
 
-		virtual bool start(bool = false) = 0;
-		virtual void close(int, bool = false) = 0;										
+		virtual bool start(bool = false) = 0;								
 	};
 	
 	extern "C"

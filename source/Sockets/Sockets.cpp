@@ -53,7 +53,7 @@ namespace Orpy
 	int Sockets::socketInit()
 	{
 #ifdef _WIN32
-		WSADATA wsaData;
+		WSADATA wsaData = { 0 };
 
 		int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 		if (result != 0)
@@ -182,13 +182,18 @@ namespace Orpy
 		timeout.tv_sec = 3;
 		timeout.tv_usec = 0;
 
+		fd_set listfds;
 		fd_set readfds;
+
+		FD_ZERO(&readfds);
+		FD_ZERO(&listfds);
+		FD_SET(_sock, &listfds);
+
 		int max_sd = _sock;
 		
 		while (_isRunning.load())
 		{	
-			FD_ZERO(&readfds);
-			FD_SET(_sock, &readfds);
+			readfds = listfds;
 
 			int client_fd = -1;
 			sockaddr_in client_address = sockaddr_in();
@@ -207,16 +212,18 @@ namespace Orpy
 			client_fd = accept(_sock, reinterpret_cast<sockaddr*>(&client_address), &client_len);
 #else
 			client_fd = accept4(_sock, reinterpret_cast<sockaddr*>(&client_address), &client_len, SOCK_NONBLOCK);
-#endif			
+#endif		
+			FD_CLR(_sock, &readfds);
+
 			if (client_fd == INVALID_SOCKET)
 			{
-				close(client_fd, false);
+				closeClient(client_fd);
 				continue;
 			}
 
 			if (!socketSetBlocking(client_fd, _block))
 			{
-				close(client_fd, false);
+				closeClient(client_fd);
 				continue;
 			}
 
@@ -246,7 +253,7 @@ namespace Orpy
 
 			if (data->startTime < std::time(nullptr))
 			{
-				clearClient(data);
+				clear(data);
 				continue;
 			}
 
@@ -265,7 +272,7 @@ namespace Orpy
 						continue;
 					break;
 				default: // Not supported or error!
-					clearClient(data);
+					clear(data);
 					continue;
 			}
 
@@ -305,7 +312,7 @@ namespace Orpy
 		
 		if(data->error)
 		{
-			clearClient(data);
+			clear(data);
 			return false;
 		}
 
@@ -319,7 +326,7 @@ namespace Orpy
 		if (data->response.fileSize < 0)
 		{
 			debug("fileSize < 0!");			
-			clearClient(data);
+			clear(data);
 			return false;
 		}
 
@@ -336,7 +343,7 @@ namespace Orpy
 			if (len < data->length)
 			{
 				debug("are you sure about the lenght of the header?");				
-				clearClient(data);
+				clear(data);
 				return false;
 			}
 
@@ -366,7 +373,7 @@ namespace Orpy
 		if (file.fail())
 		{
 			debug("are you sure about the file?");			
-			clearClient(data);
+			clear(data);
 			return false;
 		}
 
@@ -382,7 +389,7 @@ namespace Orpy
 			debug("did you touch the file? " + data->response.fileName +
 				"\nError reading file.Error flags : " + std::to_string(file.rdstate()));
 
-			clearClient(data);
+			clear(data);
 			return false;
 		}
 
@@ -424,7 +431,7 @@ namespace Orpy
 			}
 		}
 
-		clearClient(data);
+		clear(data);
 		return 0;
 	}
 		
@@ -440,30 +447,27 @@ namespace Orpy
 #endif						
 				return -1;
 				
-			clearClient(data);
+			clear(data);
 			return 0;
 		}
 
 		return 1;
 	}
 
-	void Sockets::clearClient(std::unique_ptr<HTTPData>& data)
+	void Sockets::clear(std::unique_ptr<HTTPData>& data)
 	{		
-		close(data->fd, false);
+		closeClient(data->fd);
 		debug(data->key + " with fd " + std::to_string(data->fd) + " session from " + data->IP + " closed!");
-
-		data.reset();			
 	}
 
-	void Sockets::close(int fd, bool main)
+	void Sockets::closeClient(const socket_t& fd)
 	{
-#ifdef _WIN32                
+#ifdef _WIN32  
+		shutdown(fd, SD_BOTH);
 		closesocket(fd);
 #else           
-		if (main)
-			close(fd);
-		else
-			shutdown(fd, SHUT_WR);
+		shutdown(fd, SHUT_WR);
+		close(fd);
 #endif
 	}
 

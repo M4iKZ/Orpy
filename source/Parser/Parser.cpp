@@ -32,6 +32,21 @@ namespace Orpy
         FINISH
     };
 
+    std::string getKey(std::vector<char>& buffer, int& position)
+    {
+        std::string key;        
+        while (buffer[position] != ':')
+        {
+            key.push_back(buffer[position]);
+
+            position++;            
+        }
+
+        position += 2; //Remove : + space
+
+        return key;
+    }
+
     std::string getValue(std::vector<char> buffer, int& position, bool check = false)
     {
         std::string Value;
@@ -221,193 +236,8 @@ namespace Orpy
 
             break;
         case READ_HEADERS:
-            if ((data->buffer[data->position] == 'H' || data->buffer[data->position] == 'h') && data->buffer[data->position + 1] == 'o' && data->buffer[data->position + 3] == 't')
-            {
-                //Host
-                data->position += 6;
-
-                data->request.Host = getValue(data->buffer, data->position, true);
-
-                if (!_confs->Get(data->request.Host, data->Conf))
-                {
-                    data->response.status = 444;
-
-                    return ERROR;
-                }
-
-                if (data->Conf.redirect != "")
-                {
-                    data->response.status = 303;
-                    data->response.location = data->Conf.redirect + data->request.URI;
-
-                    return ERROR;
-                }
-
-                return READ_HEADERS;
-            }
-            else if ((data->buffer[data->position] == 'A' || data->buffer[data->position] == 'a') && data->buffer[data->position + 13] == 'n' && data->buffer[data->position + 14] == 'g')
-            {
-                //Accept-Encoding: gzip, deflate, br
-                data->position += 16;
-
-                while (data->buffer[data->position] != '\r' && data->buffer[data->position + 1] != '\n')
-                {
-                    if (data->buffer[data->position] == 'b' && data->buffer[data->position + 1] == 'r')
-                        data->request.br = true;
-
-                    ++data->position;
-                }
-
-                data->position += 2; //Remove \r\n
-
-                return READ_HEADERS;
-            }
-            else if (data->request.isPOST && (data->buffer[data->position] == 'C' || data->buffer[data->position] == 'c') && data->buffer[data->position + 7] == '-' && data->buffer[data->position + 8] == 'T' && data->buffer[data->position + 9] == 'y' && data->buffer[data->position + 10] == 'p' && data->buffer[data->position + 11] == 'e')
-            {
-                // Content-Type: application/x-www-form-urlencoded
-                data->position += 14;
-
-                /*
-                0 : application/x-www-form-urlencoded
-                1 : multipart/form-data
-                2 : application/json
-                3 : application/xml
-                4 : application/pdf
-                5 : application/octet-stream
-                */
-
-                // Content-Type: multipart/form-data; boundary=[boundary string]
-
-                if (data->buffer[data->position] == 'm' && data->buffer[data->position + 18] == 'a')
-                {
-                    data->position += 30;
-
-                    data->request.isMultipart = true;
-                    data->request.boundary = "--";
-                    data->request.boundary += getValue(data->buffer, data->position);
-                }
-                else
-                {
-                    data->request.contentType = getValue(data->buffer, data->position);
-
-                    if (data->request.contentType.find("application/x-www-form-urlencoded") != 0)
-                    {
-                        data->request.isPOST = false;
-                        data->response.status = 501; //not implemented                        
-
-                        return ERROR;
-                    }
-                }
-
-                return READ_HEADERS;
-            }
-            else if (data->request.isPOST && (data->buffer[data->position] == 'C' || data->buffer[data->position] == 'c') && data->buffer[data->position + 12] == 't' && data->buffer[data->position + 13] == 'h')
-            {
-                //Content-Length: 37    
-                data->position += 16;
-
-                data->request.contentLength = std::stoi(getValue(data->buffer, data->position));
-
-                return READ_HEADERS;
-            }
-            else if ((data->buffer[data->position] == 'C' || data->buffer[data->position] == 'c') && data->buffer[data->position + 4] == 'i' && data->buffer[data->position + 5] == 'e')
-            {
-                //Cookie: session_id=abc123; user_id=1;
-                data->position += 8;
-
-                std::string value;
-                std::string key;
-                while (1)
-                {
-                    if (data->buffer[data->position] == '=')
-                    {
-                        data->request.cookies[value] = "";
-                        key = value;
-                        value = "";
-                    }
-                    else if (data->buffer[data->position] == ';' || data->buffer[data->position] == '\r')
-                    {
-                        data->request.cookies[key] = value;
-                        value = "";
-
-                        if (data->buffer[data->position] == '\r')
-                            break;
-
-                        data->position++; //jump the space?
-                    }
-                    else
-                    {
-                        value.push_back(data->buffer[data->position]);
-                    }
-
-                    data->position++;
-                }
-
-                return READ_HEADERS;
-            }
-            else if ((data->buffer[data->position] == 'O' || data->buffer[data->position] == 'o') && data->buffer[data->position + 1] == 'r' && data->buffer[data->position + 2] == 'i' && data->buffer[data->position + 3] == 'g' && data->buffer[data->position + 4] == 'i' && data->buffer[data->position + 6] == ':')
-            {
-                //Origin: http://localhost:8888
-                data->position += 8;
-
-                std::string url = getValue(data->buffer, data->position);
-                std::string http = "http://";
-                std::string https = "https://";
-
-                if (url.find(http) == 0)
-                    url.erase(0, http.length());
-                else if (url.find(https) == 0)
-                    url.erase(0, https.length());
-
-                if (url.find(":") != std::string::npos)
-                    url.erase(url.find(":"), 1);
-
-                data->request.Origin = url;
-
-                return READ_HEADERS;
-            }
-            else if ((data->buffer[data->position] == 'R' || data->buffer[data->position] == 'r') && data->buffer[data->position + 6] == 'r')
-            {
-                //Referer: http://localhost:8888/
-                data->position += 9;
-
-                data->request.Referer = getValue(data->buffer, data->position);
-
-                return READ_HEADERS;
-            }
-            else if ((data->buffer[data->position] == 'I' || data->buffer[data->position] == 'i') && data->buffer[data->position + 2] == '-' && data->buffer[data->position + 11] == '-')
-            {
-                //If-Modified-Since
-                data->position += 19;
-
-                data->request.fileModifiedSince = getValue(data->buffer, data->position);
-
-                return READ_HEADERS;
-            }
-            else if (data->buffer[data->position] == 'I' && data->buffer[data->position + 1] == 'P')
-            {
-                //IP
-                data->position += 4;
-
-                data->request.clientIP = getValue(data->buffer, data->position);
-
-                return READ_HEADERS;
-            }
-            else if ((data->buffer[data->position] == 'U' || data->buffer[data->position] == 'u') && data->buffer[data->position + 4] == '-')
-            {
-                //User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36
-                data->position += 12;
-
-                data->request.useragent = getValue(data->buffer, data->position);
-
-                std::string useragent = data->request.useragent;
-                std::transform(useragent.begin(), useragent.end(), useragent.begin(), ::tolower); // find() is case sensitive, check lower string instead
-
-                if (useragent.find("bot") != std::string::npos || useragent.find("crawler") != std::string::npos || useragent.find("spider") != std::string::npos)
-                    data->request.isBot = true;
-
-                return READ_HEADERS;
-            }
+            if (data->buffer.size() - data->position < 4)
+                return DONE;
             else if (data->buffer[data->position] == '\r' && data->buffer[data->position + 1] == '\n' && data->buffer[data->position + 2] == '\r' && data->buffer[data->position + 3] == '\n')
             {
                 data->position += 4;
@@ -416,8 +246,151 @@ namespace Orpy
             }
             else
             {
-                ++data->position;
+                std::string key = getKey(data->buffer, data->position);                
+                if (key == "Host")
+                {
+                    //Host: localhost
+                    data->request.Host = getValue(data->buffer, data->position, true);
+                    
+                    if (!_confs->Get(data->request.Host, data->Conf))
+                    {
+                        data->response.status = 444;
 
+                        return ERROR;
+                    }
+
+                    if (data->Conf.redirect != "")
+                    {
+                        data->response.status = 303;
+                        data->response.location = data->Conf.redirect + data->request.URI;
+
+                        return ERROR;
+                    }
+                }
+                else if (key == "User-Agent")
+                {
+                    //User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36
+                    data->request.useragent = getValue(data->buffer, data->position);
+
+                    std::string useragent = data->request.useragent;
+                    std::transform(useragent.begin(), useragent.end(), useragent.begin(), ::tolower); // find() is case sensitive, check lower string instead
+
+                    if (useragent.find("bot") != std::string::npos || useragent.find("crawler") != std::string::npos || useragent.find("spider") != std::string::npos)
+                        data->request.isBot = true;
+                }
+                else if (key == "Accept-Encoding")
+                {
+                    //Accept-Encoding: gzip, deflate, br                    
+                    while (data->buffer[data->position] != '\r' && data->buffer[data->position + 1] != '\n')
+                    {
+                        if (data->buffer[data->position] == 'b' && data->buffer[data->position + 1] == 'r')
+                            data->request.br = true;
+
+                        ++data->position;
+                    }
+
+                    data->position += 2; //Remove \r\n
+                }
+                else if (key == "Content-Length")
+                {
+                    //Content-Length: 37 
+                    data->request.contentLength = std::stoi(getValue(data->buffer, data->position));
+                }
+                else if (key == "Content-Type")
+                {
+                    /*
+                    0 : application/x-www-form-urlencoded
+                    1 : multipart/form-data
+                    2 : application/json
+                    3 : application/xml
+                    4 : application/pdf
+                    5 : application/octet-stream
+                    */
+                    
+                    // Content-Type: multipart/form-data; boundary=[boundary string]
+                    if (data->buffer[data->position] == 'm' && data->buffer[data->position + 18] == 'a')
+                    {
+                        data->position += 30;
+
+                        data->request.isMultipart = true;
+                        data->request.boundary = "--";
+                        data->request.boundary += getValue(data->buffer, data->position);
+                    }
+                    // Content-Type: application/x-www-form-urlencoded
+                    else                     
+                    {
+                        data->request.contentType = getValue(data->buffer, data->position);
+
+                        if (data->request.contentType.find("application/x-www-form-urlencoded") != 0)
+                        {
+                            data->request.isPOST = false;
+                            data->response.status = 501; //not implemented
+
+                            return ERROR;
+                        }
+                    }
+                }
+                else if (key == "Origin")
+                {
+                    //Origin: http://localhost:8888
+                    std::string url = getValue(data->buffer, data->position);
+                    std::string http = "http://";
+                    std::string https = "https://";
+
+                    if (url.find(http) == 0)
+                        url.erase(0, http.length());
+                    else if (url.find(https) == 0)
+                        url.erase(0, https.length());
+
+                    if (url.find(":") != std::string::npos)
+                        url.erase(url.find(":"), 1);
+
+                    data->request.Origin = url;
+                }
+                else if (key == "Referer")
+                {
+                    //Referer: http://localhost:8888/
+                    data->request.Referer = getValue(data->buffer, data->position);
+                }
+                else if (key == "IP")
+                {
+                    //IP my nginx custom header
+                    data->IP = getValue(data->buffer, data->position);
+                }
+                else if (key == "Cookie")
+                {
+                    //Cookie: session_id=abc123; user_id=1;
+                    std::string value;
+                    std::string key;
+                    while (1)
+                    {
+                        if (data->buffer[data->position] == '=')
+                        {
+                            data->request.cookies[value] = "";
+                            key = value;
+                            value = "";
+                        }
+                        else if (data->buffer[data->position] == ';' || data->buffer[data->position] == '\r')
+                        {
+                            data->request.cookies[key] = value;
+                            value = "";
+
+                            if (data->buffer[data->position] == '\r')
+                                break;
+
+                            data->position++; //jump the space?
+                        }
+                        else
+                        {
+                            value.push_back(data->buffer[data->position]);
+                        }
+
+                        data->position++;
+                    }
+                }
+                else
+                    getValue(data->buffer, data->position);
+                
                 return READ_HEADERS;
             }
 

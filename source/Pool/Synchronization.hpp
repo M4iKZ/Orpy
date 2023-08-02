@@ -12,14 +12,16 @@ namespace Orpy
     public:
         void push(std::unique_ptr<T> data) 
         {
-            std::lock_guard<std::mutex> lock(mut);
-            q.push(std::move(data));
+            {
+                std::lock_guard<std::mutex> lock(mut);
+                q.push(std::move(data));
+            }
+
             con.notify_one();
         }
 
         std::unique_ptr<T> pop() 
         {
-            std::unique_ptr<T> data;
             {
                 std::unique_lock<std::mutex> lock(mut);
                 con.wait(lock, [this]() { return !q.empty() || !isRunning; });
@@ -27,11 +29,11 @@ namespace Orpy
                 if (!isRunning)
                     return nullptr;
 
-                data = std::move(q.front());
+                std::unique_ptr<T> data = std::move(q.front());
                 q.pop();
-            }
 
-            return data;
+                return data;
+            }
         }
 
         bool empty() const 
