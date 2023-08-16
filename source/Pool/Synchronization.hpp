@@ -1,61 +1,72 @@
 #pragma once
 
 #include <queue>
+#include <memory>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 
 namespace Orpy
 {
-    template<typename T>
-    class ThreadPool
+    namespace synchronization
     {
-    public:
-        void push(std::unique_ptr<T> data) 
+        template<typename T>
+        class Pool
         {
+        public:
+            Pool()
             {
-                std::lock_guard<std::mutex> lock(mut);
-                q.push(std::move(data));
+                _isRunning.store(true);
             }
 
-            con.notify_one();
-        }
-
-        std::unique_ptr<T> pop() 
-        {
+            ~Pool()
             {
-                std::unique_lock<std::mutex> lock(mut);
-                con.wait(lock, [this]() { return !q.empty() || !isRunning; });
-
-                if (!isRunning)
-                    return nullptr;
-
-                std::unique_ptr<T> data = std::move(q.front());
-                q.pop();
-
-                return data;
+                stop();
             }
-        }
 
-        bool empty() const 
-        {
-            std::lock_guard<std::mutex> lock(mut);
-            return q.empty();
-        }
+            void push(std::unique_ptr<T> data)
+            {                
+                {
+                    std::lock_guard<std::mutex> lock(_mutex);
+                    q.push(std::move(data));
+                }
 
-        void stop() 
-        {
-            std::lock_guard<std::mutex> lock(mut);
+                _cond.notify_one();
+            }
+
+            std::unique_ptr<T> pop()
             {
-                isRunning = false;
-            }
-            
-            con.notify_all();
-        }
+                {
+                    std::unique_lock<std::mutex> lock(_mutex);
+                    _cond.wait(lock, [this]() { return !q.empty() || !_isRunning.load(); });
 
-    private:
-        std::queue<std::unique_ptr<T>> q;
-        std::mutex mut;
-        std::condition_variable con;
-        bool isRunning = true;
-    };
+                    if (!_isRunning.load())
+                        return nullptr;
+
+                    std::unique_ptr<T> data = std::move(q.front());
+                    q.pop();
+
+                    return data;
+                }
+            }
+
+            bool empty()
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+                return q.empty();
+            }
+
+            void stop()
+            {
+                _isRunning.store(false);
+                _cond.notify_all();
+            }
+
+        private:
+            std::queue<std::unique_ptr<T>> q;
+            std::mutex _mutex;
+            std::condition_variable _cond;
+            std::atomic<bool> _isRunning;
+        };
+    }
 }

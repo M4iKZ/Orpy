@@ -1,12 +1,5 @@
-#include <iostream>
-#include <type_traits>
-#include <functional>
-#include <memory>
-#include <string>
-#include <cctype>
 
-#include "Parser.hpp"
-#include "IConfs.hpp"
+#include "parser.hpp"
 
 namespace Orpy
 {
@@ -32,7 +25,7 @@ namespace Orpy
         FINISH
     };
 
-    std::string getKey(std::vector<char>& buffer, int& position)
+    std::string getKey(std::string& buffer, int& position)
     {
         std::string key;        
         while (buffer[position] != ':')
@@ -47,7 +40,7 @@ namespace Orpy
         return key;
     }
 
-    std::string getValue(std::vector<char> buffer, int& position, bool check = false)
+    std::string getValue(const std::string& buffer, int& position, bool check = false)
     {
         std::string Value;
         bool port = false;
@@ -98,7 +91,7 @@ namespace Orpy
         }
     }
 
-    State parse(State current_state, std::unique_ptr<HTTPData>& data)
+    State parse(State current_state, std::unique_ptr<http::Data>& data)
     {
         switch (current_state)
         {
@@ -252,7 +245,7 @@ namespace Orpy
                     //Host: localhost
                     data->request.Host = getValue(data->buffer, data->position, true);
                     
-                    if (!_confs->Get(data->request.Host, data->Conf))
+                    if (!_conf->Get(data->request.Host, data->Conf))
                     {
                         data->response.status = 444;
 
@@ -404,9 +397,11 @@ namespace Orpy
         return ERROR;
     }
 
-    void parser(std::unique_ptr<HTTPData>& data)
+    void parser(std::unique_ptr<http::Data>& data)
     {
         State current_state = READ_METHOD;
+        try
+        {
         while (data->position < data->buffer.size())
         {
             current_state = parse(current_state, data);
@@ -419,21 +414,32 @@ namespace Orpy
                 break;
             }
         }
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Caught exception in Parser: " << e.what() << std::endl;
+
+            data->error = true;
+            data->response.status = 500;
+        }
     }
 
-    bool getType(std::unique_ptr<HTTPData>& data)
+    bool getType(std::unique_ptr<http::Data>& data)
     {
         //CUSTOM SITE MIME TYPES
-        auto conf = data->Conf.mimetypes.find(data->response.content_type);
-        if (conf != data->Conf.mimetypes.end())
+        if(!data->Conf.mimetypes.empty())
         {
-            data->response.content_type = conf->second;
-            return true;
+            auto conf = data->Conf.mimetypes.find(data->response.content_type);
+            if (conf != data->Conf.mimetypes.end())
+            {
+                data->response.content_type = conf->second;
+                return true;
+            }
         }
 
         //ORPY DEFAULT MIME TYPES
-        auto it = ContentTypeMapping.find(data->response.content_type);
-        if (it == ContentTypeMapping.end())
+        auto it = http::ContentType.find(data->response.content_type);
+        if (it == http::ContentType.end())
             return false;
 
         data->response.content_type = it->second;
@@ -441,7 +447,7 @@ namespace Orpy
         return true;
     }
 
-    void getPOST(std::unique_ptr<HTTPData>& data)
+    void getPOST(std::unique_ptr<http::Data>& data)
     {
         //formType=Form-Url-Encoded&name=&email=        
         if (data->position < data->buffer.size())
@@ -473,11 +479,11 @@ namespace Orpy
         }
     }
 
-    void elaborateMultipart(std::unique_ptr<HTTPData>& data)
+    void elaborateMultipart(std::unique_ptr<http::Data>& data)
     {
         bool work = true;
         MULTIPARTState state = HEADER;
-        MP_DATA mpdata;
+        http::Request::MultiPart mpdata;
         std::string boundary = "";
         std::string line = "";
         int position = data->position;

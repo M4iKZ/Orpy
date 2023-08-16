@@ -10,21 +10,18 @@ set(CMAKE_BUILD_TYPE Release)
 # set(CMAKE_BUILD_TYPE Debug)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
 
-# Set the output directory for the build
-set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/_out)
-
 # Add the common include directory to the include search path
-include_directories(${CMAKE_SOURCE_DIR}/Common)
-
-add_subdirectory(ConfsManager)
-add_subdirectory(Parser)
-add_subdirectory(Router)
-add_subdirectory(Sockets)
-add_subdirectory(Core)
-add_subdirectory(Json)
+include_directories(${CMAKE_SOURCE_DIR}/source)
 
 # Add the core executable
-add_executable(Orpy ${PROJECT_SOURCE_DIR}/Orpy/Orpy.cpp)
+add_executable(Orpy ${PROJECT_SOURCE_DIR}/source/Orpy.cpp
+			        ${PROJECT_SOURCE_DIR}/source/Core/core.cpp
+			        ${PROJECT_SOURCE_DIR}/source/Sockets/sockets.cpp
+				    ${PROJECT_SOURCE_DIR}/source/Conf/conf.cpp
+			        ${PROJECT_SOURCE_DIR}/source/Parser/parser.cpp
+			        ${PROJECT_SOURCE_DIR}/source/Router/router.cpp
+			        ${PROJECT_SOURCE_DIR}/source/Json/json.cpp
+			        ${PROJECT_SOURCE_DIR}/source/Tools/tools.cpp)
 
 if(UNIX AND NOT APPLE)
   target_link_libraries(Orpy -ldl)  

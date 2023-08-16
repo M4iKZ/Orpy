@@ -1,17 +1,18 @@
 #pragma once
 
+#include <string>
 #include <vector>
+#include <sstream>
 
-#include "Common.hpp"
-
-#include "Request.hpp"
+#include "Conf/conf.hpp"
+#include "Common/http.hpp"
 
 namespace Orpy
 {
-	void getPOST(std::unique_ptr<HTTPData>&);
-	void elaborateMultipart(std::unique_ptr<HTTPData>&);
+	void getPOST(std::unique_ptr<http::Data>&);
+	void elaborateMultipart(std::unique_ptr<http::Data>&);
 
-	bool getType(std::unique_ptr<HTTPData>&);
+	bool getType(std::unique_ptr<http::Data>&);
 
-	void parser(std::unique_ptr<HTTPData>&);
+	void parser(std::unique_ptr<http::Data>&);
 }

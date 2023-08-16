@@ -3,55 +3,56 @@
 #include <fstream>
 #include <sstream>
 
-#include "Json.hpp"
 #include "nlohmann/Json.hpp"
-
-using json = nlohmann::json;
+#include "json.hpp"
 
 namespace Orpy
 {
-	void conf_from_json(const json j, SITEData& site, fs::path file)
+	namespace json
 	{
-		site.redirect = j.value("redirect", "");
-		if (site.redirect != "")
-			return;
-
-		site.path = j.at("path").get<std::string>();
-
-		std::vector<std::string> langs = {};
-		site.langs = j.value("lang", langs);
-
-		std::vector<std::string> positions = {};
-		site.positions = j.value("positions", positions);
-
-		site.allowFiles = j.value("allowFiles", true);
-				
-		std::unordered_map<std::string, std::string> mimetypes = {};
-		site.mimetypes = j.value("mimetypes", mimetypes);
-
-		std::vector<std::string> urls = {};
-		site.urls = j.value("urls", urls);
-	}
-
-	void loadJsonConfig(fs::path file_path, std::unordered_map<std::string, SITEData>& archive)
-	{
-		std::ifstream json_file(file_path, std::ios::binary);
-
-		try
+		void conf_from_json(const nlohmann::json& j, site::Settings& site, const std::filesystem::path& file)
 		{
-			json jsonData = json::parse(json_file);
+			site.redirect = j.value("redirect", "");
+			if (!site.redirect.empty())
+				return;
 
-			SITEData site;
-			conf_from_json(jsonData, site, file_path);
+			site.path = j.at("path").get<std::string>();
 
-			archive[file_path.stem().string()] = site;
-		}
-		catch (json::parse_error& e)
-		{
-			std::cerr << "Error parsing config file " << file_path.stem().string() << " with error : " << e.what() << std::endl;
-			// Discard the file and continue running the program
+			std::vector<std::string> langs = {};
+			site.supported_langs = j.value("lang", langs);
+
+			std::vector<std::string> urls = {};
+			site.urls = j.value("urls", urls);
+			std::vector<std::string> positions = {};
+			site.positions = j.value("positions", positions);
+
+			std::unordered_map<std::string, std::string> mimetypes = {};
+			site.mimetypes = j.value("mimetypes", mimetypes);
+
+			site.allowFiles = j.value("allowFiles", true);
+			site.enableMemo = j.value("memo", false);
 		}
 
-		json_file.close();
+		void loadConfig(const std::filesystem::path& file_path, std::unordered_map<std::string, site::Settings>& archive)
+		{
+			std::ifstream json_file(file_path, std::ios::binary);
+
+			try
+			{
+				nlohmann::json jsonData = nlohmann::json::parse(json_file);
+
+				site::Settings site;
+				conf_from_json(jsonData, site, file_path);
+
+				archive[file_path.stem().string()] = site;
+			}
+			catch (nlohmann::json::parse_error& e)
+			{
+				// PUT INTO LOGGER!
+				std::cerr << "Error parsing config file " << file_path.stem().string() << " with error : " << e.what() << std::endl;				
+			}
+
+			json_file.close();
+		}
 	}
 }

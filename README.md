@@ -1,6 +1,6 @@
 # Orpy HTTP Server
 
-Implementation of a HTTP server in C++17 for Windows and Linux v2.
+Implementation of a HTTP server in C++17 for Windows and Linux.
 Updated code based on last complete version of Orpy.
 
 ## Features
@@ -14,7 +14,11 @@ Updated code based on last complete version of Orpy.
 
 ```bash
 mkdir build && cd build
-cmake ../source ..
+cmake ..
+```
+
+Linux
+```bash
 make install # on linux
 ```
 

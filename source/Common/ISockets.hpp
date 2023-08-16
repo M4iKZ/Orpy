@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IHttp.hpp"
+#include <memory>
 
 namespace Orpy
 {
@@ -9,11 +9,10 @@ namespace Orpy
 	public:
 		virtual ~ISockets() = default;
 
-		virtual bool start(bool = false) = 0;								
+		virtual bool start(bool = false) = 0;									
 	};
-	
-	extern "C"
-	{
-		ISockets* allSockets(IHttp*, const char*, int&);
-	}
+
+	void setSockets(const std::string&, const int&);
+
+	extern std::shared_ptr<ISockets> _sock;
 }

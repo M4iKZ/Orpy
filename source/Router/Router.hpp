@@ -1,8 +1,13 @@
 #pragma once
 
-#include "Common.hpp"
+#include <filesystem>
+#include <algorithm>
+#include <vector>
+#include <variant>
+
+#include "Common/http.hpp"
 
 namespace Orpy
 {
-	void check_URL(std::unique_ptr<HTTPData>&);
+	void check_URL(std::unique_ptr<http::Data>&);
 }

@@ -19,7 +19,20 @@
 # pragma comment(lib, "Mswsock.lib")
 # pragma comment(lib, "AdvApi32.lib")
 
+typedef SOCKET socket_t;
+typedef int socklen_t;
+/* POSIX ssize_t is not a thing on Windows */
+
+typedef signed long long int ssize_t;
+
 #else
+
+typedef int socket_t;
+
+// winsock has INVALID_SOCKET which is returned by socket(),
+// this is the POSIX replacement
+# define INVALID_SOCKET -1
+
 # include <arpa/inet.h>
 # include <sys/socket.h>
 # include <sys/types.h>
@@ -29,8 +42,6 @@
 # include <cstring>
 
 # include <pthread.h>
-
-#define __min(a,b) (((a) < (b)) ? (a) : (b))
 
 #endif 
 
@@ -45,35 +56,23 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <shared_mutex>
 
-#include "ISockets.hpp"
-#include "Synchronization.hpp"
+#include "Common/common.hpp"
+#include "Common/ISockets.hpp"
+#include "Common/ICore.hpp"
+
+#include "Pool/synchronization.hpp"
 
 namespace Orpy
 {
 	class Sockets : public ISockets
 	{
 	protected:
-#ifdef _WIN32
-		typedef SOCKET socket_t;
-		typedef int socklen_t;
-		/* POSIX ssize_t is not a thing on Windows */
-		typedef signed long long int ssize_t;
-#else
-		typedef int socket_t;
-		// winsock has INVALID_SOCKET which is returned by socket(),
-		// this is the POSIX replacement
-# define INVALID_SOCKET -1
-#endif /* _WIN32 */
-
-		IHttp* _http;
-
 		socket_t _sock = INVALID_SOCKET;
 
-		int _timeout_in_seconds = 2 * 60;
-
-		char _host[10];
-		short _port;
+		std::string _host = "locahost";
+		int _port = 8888;
 
 		struct sockaddr_in _socketAddress = sockaddr_in();
 		int _socketAddress_len = 0;
@@ -82,38 +81,40 @@ namespace Orpy
 
 		int  socketInit();
 		bool socketSetBlocking(int, bool);
-		void socketClose();
+		void  socketClose();
 
 		bool setSocket(int, socket_t, sockaddr_in&, int&);
 
 		void listener();
 		void Worker(int);
 
-		bool receiveData(std::unique_ptr<HTTPData>&);
-		bool sendData(std::unique_ptr<HTTPData>&);
-				
-		int Receive(std::unique_ptr<HTTPData>&, int&);
-		int Send(std::unique_ptr<HTTPData>&, int&);
-		
-		// Sends a file
-		bool sendFile(std::unique_ptr<HTTPData>&);
+		bool receiveData(std::unique_ptr<http::Data>&);
+		bool sendData(std::unique_ptr<http::Data>&);
 
-		void clear(std::unique_ptr<HTTPData>&);
+		// Send a file
+		bool sendFile(std::unique_ptr<http::Data>&);
+
+		int Receive(std::unique_ptr<http::Data>&, int&);
+		int Send(std::unique_ptr<http::Data>&, int&);
+				
+		void clearClient(std::unique_ptr<http::Data>&);
 		void closeClient(const socket_t&);
 
-		//thread vars
+		void push(std::unique_ptr<http::Data>, int = 0);
+				
 		std::atomic<bool> _isRunning;		
-		int numWorkers;
+		int numWorkers = 3;
+		int currWorker = 1;
 		
-		ThreadPool<HTTPData> _queue;
+		std::vector<std::unique_ptr<synchronization::Pool<http::Data>>> _queues;
 		
 		std::vector<std::thread> _workers;
 		std::thread _listener;
 
 	public:
-		Sockets(IHttp*, const char*, int&);
-		~Sockets() override;
+		Sockets(const std::string&, const int&);
+		~Sockets();
 
 		bool start(bool = false) override;
-	};
+	}; 
 }

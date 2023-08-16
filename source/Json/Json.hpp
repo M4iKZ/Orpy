@@ -2,11 +2,12 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include "Common.hpp"
-
-namespace fs = std::filesystem;
+#include "Common/data.hpp"
 
 namespace Orpy
 {
-	void loadJsonConfig(fs::path, std::unordered_map <std::string, SITEData>&);
+	namespace json
+	{
+		void loadConfig(const std::filesystem::path&, std::unordered_map <std::string, site::Settings>&);
+	}
 }

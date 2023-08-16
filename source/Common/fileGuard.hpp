@@ -1,20 +1,21 @@
 #pragma once
 
 #include <iostream>
-#include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 #include <filesystem>
 #include <map>
 #include <chrono>
 #include <functional>
+#include <string>
+#include <vector>
+#include <atomic>
 
 #include <thread>
 
 #ifndef _WIN32
 #include <pthread.h>
 #endif
-
-namespace fs = std::filesystem;
 
 namespace Orpy
 {
@@ -24,85 +25,85 @@ namespace Orpy
 
     protected:
         C* _class;
-        std::vector<std::string> _path;
+        std::vector<std::string> _paths;
 
-        std::mutex _mutex;
+        std::shared_mutex _mutex;
         std::condition_variable _condition;
 
-        bool _isRunning = false;
+        std::atomic<bool> _isRunning;
 
-        std::map<fs::path, fs::file_time_type> last_modified;
+        std::map<std::filesystem::path, std::filesystem::file_time_type> last_modified;
 
-        std::thread _guard;
+        std::thread _worker;
 
     public:
 
-        fileGuard(C* c, std::string path = "") : _class(c)
+        fileGuard(C* c, const std::string path = "") : _class(c)
         {
             if(!path.empty())
             {
-                if (!fs::exists(path) || !fs::is_directory(path))
+                if (!std::filesystem::exists(path) || !std::filesystem::is_directory(path))
                 {
-                    std::cout << "Error: " << path << " is not a valid directory" << std::endl;
+                    std::cout << "Error: " << path << " is not a valid directory..." << std::endl;
                     return;
                 }
 
-                std::unique_lock<std::mutex> lock(_mutex);
+                std::unique_lock<std::shared_mutex> lock(_mutex);
                 {
-                    _path.push_back(path);
+                    _paths.push_back(path);
                 }
             }
 
-            _isRunning = true;
+            _isRunning.store(true);
 
-            _guard = std::thread(&fileGuard<C>::guardFolder, this);
+            _worker = std::thread(&fileGuard<C>::guardFolder, this);
         }
 
         ~fileGuard()
         {
-            std::unique_lock<std::mutex> lock(_mutex);
+            std::unique_lock<std::shared_mutex> lock(_mutex);
             {
-                _isRunning = false;
+                _isRunning.store(false);
             }
 
             _condition.notify_all();
 
-            if (_guard.joinable())
-                _guard.join();
+            if (_worker.joinable())
+                _worker.join();
         }
 
-        void addPath(std::string path)
+        void addPath(const std::string& path)
         {
-            if (!fs::exists(path) || !fs::is_directory(path))
+            if (!std::filesystem::exists(path) || !std::filesystem::is_directory(path))
             {
                 std::cout << "Error: " << path << " is not a valid directory" << std::endl;
                 return;
             }
 
-            std::unique_lock<std::mutex> lock(_mutex);
+            std::unique_lock<std::shared_mutex> lock(_mutex);
             {                
-                _path.push_back(path);
+                _paths.push_back(path);
             }
         }
 
-        void removePath(std::string path)
+        void removePath(const std::string& path)
         {
-            std::lock_guard<std::mutex> lock(_mutex);
+            std::lock_guard<std::shared_mutex> lock(_mutex);
             {
-                _path.erase(std::remove(_path.begin(), _path.end(), path), _path.end());
+                _paths.erase(std::remove(_paths.begin(), _paths.end(), path), _paths.end());
             }
         }
 
     private:
 
-        void ciclePath(std::string p)
+        void ciclePath(const std::string& p)
         {
-            for (const auto& entry : fs::recursive_directory_iterator(p))
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(p))
             {
-                if (fs::is_regular_file(entry))
+                if (std::filesystem::is_regular_file(entry))
                 {
                     auto path = entry.path();
-                    auto last_write_time = fs::last_write_time(path);
+                    auto last_write_time = std::filesystem::last_write_time(path);
                     if (last_modified.find(path) == last_modified.end())
                     {
                         last_modified[path] = last_write_time;
@@ -121,7 +122,7 @@ namespace Orpy
         {
             for (auto it = last_modified.begin(); it != last_modified.end();)
             {
-                if (!fs::exists(it->first))
+                if (!std::filesystem::exists(it->first))
                 {
                     _class->Deleted(it->first.stem().string());
                     it = last_modified.erase(it);
@@ -133,11 +134,11 @@ namespace Orpy
 
         void guardFolder()
         {
-            while (_isRunning)
+            while (_isRunning.load())
             {
                 checkDelete();
 
-                for(auto& p : _path)
+                for(auto& p : _paths)
                     ciclePath(p);
 
                 std::this_thread::sleep_for(std::chrono::seconds(1));
