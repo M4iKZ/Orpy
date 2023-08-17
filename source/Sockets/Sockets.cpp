@@ -39,7 +39,7 @@ namespace Orpy
 			if (t.joinable())
 				t.join();
 						
-		debug("Sockets lib unloaded...");		
+		debug("Sockets unloaded...");		
 	}
 
 	int Sockets::socketInit()
@@ -277,16 +277,19 @@ namespace Orpy
 
 	void Sockets::push(std::unique_ptr<http::Data> data, int id)
 	{		
-		if (!id)
 		{
-			_queues.at(currWorker)->push(std::move(data));
+			std::unique_lock<std::shared_mutex> lock(_mutex);
+			if (!id)
+			{
+				_queues.at(currWorker)->push(std::move(data));
 
-			++currWorker;
-			if (currWorker == numWorkers)
-				currWorker = 0;
+				++currWorker;
+				if (currWorker == numWorkers)
+					currWorker = 0;
+			}
+			else
+				_queues.at(id)->push(std::move(data));
 		}
-		else
-			_queues.at(id)->push(std::move(data));		
 	}
 	
 	bool Sockets::receiveData(std::unique_ptr<http::Data>& data)

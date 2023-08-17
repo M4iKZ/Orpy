@@ -229,22 +229,21 @@ namespace Orpy
 
             break;
         case READ_HEADERS:
-            if (data->buffer.size() - data->position < 4)
-                return DONE;
-            else if (data->buffer[data->position] == '\r' && data->buffer[data->position + 1] == '\n' && data->buffer[data->position + 2] == '\r' && data->buffer[data->position + 3] == '\n')
+            if (data->buffer[data->position] == '\r' && data->buffer[data->position + 1] == '\n')
             {
-                data->position += 4;
+                data->position += 2;
 
                 return DONE;
             }
             else
             {
-                std::string key = getKey(data->buffer, data->position);                
+                std::string key = getKey(data->buffer, data->position);
+
                 if (key == "Host")
                 {
                     //Host: localhost
                     data->request.Host = getValue(data->buffer, data->position, true);
-                    
+
                     if (!_conf->Get(data->request.Host, data->Conf))
                     {
                         data->response.status = 444;
@@ -299,7 +298,7 @@ namespace Orpy
                     4 : application/pdf
                     5 : application/octet-stream
                     */
-                    
+
                     // Content-Type: multipart/form-data; boundary=[boundary string]
                     if (data->buffer[data->position] == 'm' && data->buffer[data->position + 18] == 'a')
                     {
@@ -310,7 +309,7 @@ namespace Orpy
                         data->request.boundary += getValue(data->buffer, data->position);
                     }
                     // Content-Type: application/x-www-form-urlencoded
-                    else                     
+                    else
                     {
                         data->request.contentType = getValue(data->buffer, data->position);
 
@@ -344,6 +343,11 @@ namespace Orpy
                 {
                     //Referer: http://localhost:8888/
                     data->request.Referer = getValue(data->buffer, data->position);
+                }
+                else if (key == "If-Modified-Since")
+                {
+                    //If-Modified-Since
+                    data->request.fileModifiedSince = getValue(data->buffer, data->position);
                 }
                 else if (key == "IP")
                 {
@@ -380,6 +384,9 @@ namespace Orpy
 
                         data->position++;
                     }
+
+                    // Increment position to move past '\r' and '\n'
+                    data->position += 2;
                 }
                 else
                     getValue(data->buffer, data->position);

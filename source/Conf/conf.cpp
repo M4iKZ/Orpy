@@ -21,7 +21,7 @@ namespace Orpy
 	{
 		_guard.reset();
 
-		debug("Confs lib unloaded ...");
+		debug("Confs unloaded ...");
 	}
 
 	void Conf::New(std::filesystem::path file)

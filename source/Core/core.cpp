@@ -17,7 +17,7 @@ namespace Orpy
 
 	Core::~Core()
 	{		
-		debug("Core lib unloaded ...");
+		debug("Core unloaded ...");
 	}
 
 	void Core::managePOST(std::unique_ptr<http::Data>& data)

@@ -111,6 +111,8 @@ namespace Orpy
 		std::vector<std::thread> _workers;
 		std::thread _listener;
 
+		std::shared_mutex _mutex;
+
 	public:
 		Sockets(const std::string&, const int&);
 		~Sockets();
