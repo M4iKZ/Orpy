@@ -330,81 +330,65 @@ namespace Orpy
 
 	bool Sockets::sendFile(std::unique_ptr<http::Data>& data)
 	{
-		if (data->response.fileSize < 0)
+		if (data->response.content.empty())
 		{
-			debug("fileSize < 0!");			
-			clearClient(data);
-			return false;
-		}
+			size_t ssize = std::min(static_cast<size_t>(data->response.fileSize - data->response.sent), MaxFileSize);
+			data->response.content.resize(ssize);
 
-		int len = 0;
-		int result = 0;
-		if (!data->response.sentHeader)
-		{
-			result = Send(data, len);
-			if (result == 0)
-				return false;
-			else if (result == -1)
-				return true;
-
-			if (len < data->length)
+			if (!data->response.file.is_open())
 			{
-				debug("are you sure about the lenght of the header?");				
-				clearClient(data);
+				data->response.file.open(data->response.fileName, std::ios::in | std::ifstream::binary);
+				if (data->response.file.fail())
+				{
+					debug("are you sure about the file?");
+					return false;
+				}
+			}
+
+			if (data->response.cursor != std::streampos())
+				data->response.file.seekg(data->response.cursor);
+
+			if (!data->response.file.read(data->response.content.data(), ssize))
+			{
+				debug("did you touch the file? " + data->response.fileName +
+					"\n	Error reading file.Error flags : " + std::to_string(data->response.file.rdstate()));
+
 				return false;
 			}
 
-			data->response.sentHeader = true;
-			data->buffer.clear();
-			data->startTime = setTime();
+			data->buffer.insert(data->buffer.end(), data->response.content.begin(), data->response.content.end());
+
+			data->response.cursor = data->response.file.tellg();
 		}
-		else if (data->buffer.size() > 0)
+
+		if (!data->buffer.empty())
 		{
-			result = Send(data, len);
-			if (result == 0)
+			int len = 0;
+			switch (Send(data, len))
+			{
+			case 1: break;
+			case -1:
+				return true;
+			default:
 				return false;
-			else if (result == -1)
-				return true;			
+			}
+
+			if (!data->response.sentHeader)
+			{
+				data->response.sentHeader = true;
+				len -= data->length; // Remove the header from sent Data
+			}
 
 			data->response.sent += len;
 			data->buffer.clear();
+			data->response.content.clear();
+
+			data->startTime = setTime();
 		}
 
 		if (data->response.sent >= data->response.fileSize)
-		{
 			data.reset(new http::Data(0, data->fd, data->key, data->IP));
-			
-			return true;
-		}
 
-		size_t ssize = std::min(static_cast<size_t>(data->response.fileSize - data->response.sent), MaxFileSize);
-		data->buffer.resize(ssize);
-				
-		std::fstream file(data->response.fileName, std::ios::in | std::ifstream::binary);
-		if (file.fail())
-		{
-			debug("are you sure about the file?");			
-			clearClient(data);
-			return false;
-		}
-
-		if (data->response.cursor != std::streampos())
-			file.seekg(data->response.cursor);
-
-		if (!file.read(data->buffer.data(), ssize))
-		{
-			debug("did you touch the file? " + data->response.fileName +
-				"\nError reading file.Error flags : " + std::to_string(file.rdstate()));
-
-			clearClient(data);
-			return false;
-		}
-
-		data->response.cursor = file.tellg();
-		file.close();
-		
-		data->startTime = setTime();
-						
 		return true;
 	}
 

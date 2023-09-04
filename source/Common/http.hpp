@@ -210,6 +210,7 @@ namespace Orpy
 			bool sentHeader = false;
 
 			int sent = 0;
+			std::fstream file;
 			std::streampos cursor = std::streampos();
 
 			int memoPos = 0;
