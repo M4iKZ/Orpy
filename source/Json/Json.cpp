@@ -18,7 +18,7 @@ namespace Orpy
 
 			site.path = j.at("path").get<std::string>();
 
-			std::vector<std::string> langs = {};
+			std::vector<std::string> langs = { "en" };
 			site.supported_langs = j.value("lang", langs);
 
 			std::vector<std::string> urls = {};
@@ -53,6 +53,56 @@ namespace Orpy
 			}
 
 			json_file.close();
+		}
+
+		void saveConfig(const std::string& filePath, const std::string& fileName, const site::Settings& site)
+		{
+			try
+			{
+				nlohmann::json j;
+
+				if (!site.redirect.empty())
+				{
+					j["redirect"] = site.redirect;
+					return;
+				}
+
+				if (site.path.empty())
+					return;
+
+				j["path"] = site.path;
+								
+				if (site.supported_langs.size() > 0)
+				{
+					nlohmann::json langsArray = nlohmann::json::array();
+					for (const std::string& lang : site.supported_langs)
+						langsArray.push_back(lang);
+
+					j["langs"] = langsArray;
+				}
+				
+				if (site.urls.size() > 0)
+				{
+					nlohmann::json urlsArray = nlohmann::json::array();
+
+					for (const std::string& url : site.urls)
+						urlsArray.push_back(url);
+
+					j["urls"] = urlsArray;
+				}
+
+				if(!site.allowFiles)
+					j["allowFiles"] = site.allowFiles;
+
+				std::ofstream confFile(filePath + "/" + fileName + ".json");
+				confFile << j.dump(3);
+				confFile.close();
+			}
+			catch (nlohmann::json::parse_error& e)
+			{
+				// PUT INTO LOGGER!
+				std::cerr << "Error save config file " << fileName << " with error : " << e.what() << std::endl;
+			}
 		}
 	}
 }

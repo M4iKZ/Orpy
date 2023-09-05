@@ -16,6 +16,10 @@ namespace Orpy
 		virtual void Deleted(std::string) = 0;
 
 		virtual bool Get(std::string, site::Settings&) = 0;
+
+		virtual int Count() = 0;
+
+		virtual void Add() = 0;
 	};
 
 	void setConf();

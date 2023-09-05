@@ -21,7 +21,11 @@ namespace Orpy
 
 		std::unordered_map<std::string, site::Settings> _confs;
 
+		std::filesystem::path confFolder;
+		std::filesystem::path dataFolder;
+
 		void Load(std::filesystem::path);
+		void printHelp(const std::string&);
 	public:
 		Conf();
 		~Conf();
@@ -31,5 +35,9 @@ namespace Orpy
 		void Deleted(std::string) override;
 
 		bool Get(std::string, site::Settings&) override;
+
+		int Count() override;
+
+		void Add() override;
 	};
 }

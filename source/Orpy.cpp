@@ -9,15 +9,24 @@ namespace Orpy
 {
 	void start()
 	{
+		setConf();
+
 		setSockets("localhost", 8888);
 		if (_sock->start())
 		{			
-			setConf();
 			setCore();
 
+			if (!_conf->Count())
+				_conf->Add();
+			
 			debug("Enter [quit] to stop the server");
+
 			std::string command;
-			while (std::cin >> command, command != "quit");
+			while (std::cin >> command, command != "quit")
+			{
+				if (command == "add")
+					_conf->Add();
+			}
 
 			debug("'quit' command entered. Stopping the web server ...");		
 		}

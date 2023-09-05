@@ -96,26 +96,33 @@ namespace Orpy
 
     private:
 
-        void ciclePath(const std::string& p)
+        bool ciclePath(const std::string& p)
         {
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(p))
+            if (std::filesystem::exists(p))
             {
-                if (std::filesystem::is_regular_file(entry))
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(p))
                 {
-                    auto path = entry.path();
-                    auto last_write_time = std::filesystem::last_write_time(path);
-                    if (last_modified.find(path) == last_modified.end())
+                    if (std::filesystem::is_regular_file(entry))
                     {
-                        last_modified[path] = last_write_time;
-                        _class->New(path);
-                    }
-                    else if (last_modified[path] != last_write_time)
-                    {
-                        last_modified[path] = last_write_time;
-                        _class->Edited(path);
+                        auto path = entry.path();
+                        auto last_write_time = std::filesystem::last_write_time(path);
+                        if (last_modified.find(path) == last_modified.end())
+                        {
+                            last_modified[path] = last_write_time;
+                            _class->New(path);
+                        }
+                        else if (last_modified[path] != last_write_time)
+                        {
+                            last_modified[path] = last_write_time;
+                            _class->Edited(path);
+                        }
                     }
                 }
+
+                return true;
             }
+
+            return false;
         }
 
         void checkDelete()
@@ -138,8 +145,9 @@ namespace Orpy
             {
                 checkDelete();
 
-                for(auto& p : _paths)
-                    ciclePath(p);
+                for (auto& p : _paths)
+                    if (!ciclePath(p))
+                        continue;
 
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
