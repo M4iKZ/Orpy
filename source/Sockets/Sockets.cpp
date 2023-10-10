@@ -308,6 +308,16 @@ namespace Orpy
 		return true;
 	}
 
+	bool Sockets::receivePOST(std::unique_ptr<http::Data>& data)
+	{
+		int byte_count = 0;
+		int result = Receive(data, byte_count);
+		if (result <= 0)
+			return false;		
+
+		return true;
+	}
+
 	bool Sockets::sendData(std::unique_ptr<http::Data>& data)
 	{
 		int byte_count = 0;

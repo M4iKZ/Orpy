@@ -22,6 +22,15 @@ namespace Orpy
 
 	void Core::managePOST(std::unique_ptr<http::Data>& data)
 	{
+		if ((data->buffer.size() - data->position) < data->request.contentLength)
+		{
+			if (!_sock->receivePOST(data))
+			{
+				data->response.status = 500;
+				return;
+			}
+		}
+
 		if (data->request.isMultipart)
 			elaborateMultipart(data);
 		else

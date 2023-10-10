@@ -118,5 +118,6 @@ namespace Orpy
 		~Sockets();
 
 		bool start(bool = false) override;
+		bool receivePOST(std::unique_ptr<http::Data>&) override;
 	}; 
 }

@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "Common/ICore.hpp"
+#include "Common/ISockets.hpp"
 
 #include "Common/common.hpp"
 #include "Parser/parser.hpp"
