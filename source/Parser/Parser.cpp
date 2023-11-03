@@ -430,30 +430,7 @@ namespace Orpy
             data->response.status = 500;
         }
     }
-
-    bool getType(std::unique_ptr<http::Data>& data)
-    {
-        //CUSTOM SITE MIME TYPES
-        if(!data->Conf.mimetypes.empty())
-        {
-            auto conf = data->Conf.mimetypes.find(data->response.content_type);
-            if (conf != data->Conf.mimetypes.end())
-            {
-                data->response.content_type = conf->second;
-                return true;
-            }
-        }
-
-        //ORPY DEFAULT MIME TYPES
-        auto it = http::ContentType.find(data->response.content_type);
-        if (it == http::ContentType.end())
-            return false;
-
-        data->response.content_type = it->second;
-
-        return true;
-    }
-
+    
     void getPOST(std::unique_ptr<http::Data>& data)
     {
         //formType=Form-Url-Encoded&name=&email=        

@@ -19,10 +19,14 @@ cmake ..
 
 Linux
 ```bash
-make install # on linux
+make install
 ```
 
 Use Visual Studio 2022 on Windows or Visual Studio Code on Linux.
+
+## Discord
+
+Join the discord at https://orpy.dev/discord
 
 ## Design
 
@@ -33,6 +37,8 @@ The server program consists of:
 - N worker threads to process HTTP requests and sends response back to client based on CPU Threads.
 
 ## Config
+
+At first start Orpy will run a wizard helping to configure all folder and files required.
 
 If the URL is not specified in the "Configs/sites/domain.json" file, the server will respond with a 444 error. 
 

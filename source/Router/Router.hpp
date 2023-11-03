@@ -10,4 +10,6 @@
 namespace Orpy
 {
 	void check_URL(std::unique_ptr<http::Data>&);
+
+	bool getType(std::unique_ptr<http::Data>&);
 }

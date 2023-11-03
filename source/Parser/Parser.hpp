@@ -12,7 +12,5 @@ namespace Orpy
 	void getPOST(std::unique_ptr<http::Data>&);
 	void elaborateMultipart(std::unique_ptr<http::Data>&);
 
-	bool getType(std::unique_ptr<http::Data>&);
-
 	void parser(std::unique_ptr<http::Data>&);
 }

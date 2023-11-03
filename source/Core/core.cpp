@@ -70,58 +70,52 @@ namespace Orpy
 
 	void Core::prepareFile(std::unique_ptr<http::Data>& data)
 	{
-		std::filesystem::path file_path(data->request.URL);
-		data->response.content_type = file_path.extension().string().substr(1);		
-		if (getType(data))
+		if (!data->request.fileModifiedSince.empty())
 		{
-			if(!data->request.fileModifiedSince.empty())			
+			// Stored File
+			std::filesystem::file_time_type ftime = std::filesystem::last_write_time(data->request.filePath);
+			std::time_t fileUnixtime = std::chrono::system_clock::to_time_t(std::chrono::time_point_cast<std::chrono::system_clock::duration>(ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()));
+
+			std::tm fileTime = *std::gmtime(&fileUnixtime);
+			std::ostringstream filess;
+			filess << std::put_time(&fileTime, "%a, %d %b %Y %T GMT");
+
+			data->response.isFile = true;
+			data->response.fileLastEdit = filess.str();
+
+			// Cached File
+			// Define the format of the input date and time string
+			std::string format = "%a, %d %b %Y %H:%M:%S %Z";
+
+			// Create an input string stream from the date string
+			std::istringstream iss(data->request.fileModifiedSince);
+
+			// Create tm structure to store parsed values
+			std::tm timeStruct = {};
+
+			// Parse the date string using input stream and put it into tm structure
+			iss >> std::get_time(&timeStruct, format.c_str());
+
+			// Set the time zone offset to zero (GMT)
+			timeStruct.tm_hour += 1; // Adjust hour if necessary
+			std::time_t cachedUnixtime = std::mktime(&timeStruct);
+			if (cachedUnixtime >= fileUnixtime)
 			{
-				// Stored File
-				std::filesystem::file_time_type ftime = std::filesystem::last_write_time(data->request.filePath);
-				std::time_t fileUnixtime = std::chrono::system_clock::to_time_t(std::chrono::time_point_cast<std::chrono::system_clock::duration>(ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()));
-
-				std::tm fileTime = *std::gmtime(&fileUnixtime);
-				std::ostringstream filess;
-				filess << std::put_time(&fileTime, "%a, %d %b %Y %T GMT");
-
-				data->response.isFile = true;
-				data->response.fileLastEdit = filess.str();
-
-				// Cached File
-				// Define the format of the input date and time string
-				std::string format = "%a, %d %b %Y %H:%M:%S %Z";
-
-				// Create an input string stream from the date string
-				std::istringstream iss(data->request.fileModifiedSince);
-
-				// Create tm structure to store parsed values
-				std::tm timeStruct = {};
-
-				// Parse the date string using input stream and put it into tm structure
-				iss >> std::get_time(&timeStruct, format.c_str());
-
-				// Set the time zone offset to zero (GMT)
-				timeStruct.tm_hour += 1; // Adjust hour if necessary
-				std::time_t cachedUnixtime = std::mktime(&timeStruct);
-
-				if (cachedUnixtime > fileUnixtime)
-				{
-					data->response.status = 304;
-					return;
-				}
+				data->response.status = 304;
+				return;
 			}
+		}
 
+		data->response.fileName = data->request.filePath;
+
+		if (data->response.content.empty())
+		{
 			data->phase = 2; // SEND FILE
 
-			data->response.fileName = data->request.filePath;
-					
-			if (data->response.content.empty())			
-				data->response.fileSize = std::filesystem::file_size(data->response.fileName);				
-			
-			data->response.content_length = data->response.fileSize;			
+			data->response.fileSize = std::filesystem::file_size(data->response.fileName);
 		}
-		else
-			data->response.status = 404;
+
+		data->response.content_length = data->response.fileSize;
 	}
 	
 	// Generates the response buffer from the fields in the struct
