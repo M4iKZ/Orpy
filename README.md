@@ -24,10 +24,6 @@ make install
 
 Use Visual Studio 2022 on Windows or Visual Studio Code on Linux.
 
-## Discord
-
-Join the discord at https://orpy.dev/discord
-
 ## Design
 
 The server program consists of:
